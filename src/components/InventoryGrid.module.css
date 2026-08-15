@@ -50,12 +50,12 @@
 
 .emptyAction {
   margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-5);
   background: var(--color-accent);
   color: var(--color-on-accent);
   border: 0;
-  border-radius: var(--radius-md);
-  font-weight: var(--weight-medium);
+  border-radius: var(--radius-full);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: background var(--transition-fast);
 }

@@ -50,6 +50,7 @@
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  color: var(--color-heading);
 }
 
 .wonBox {
@@ -133,11 +134,11 @@
 }
 
 .bidButton {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-5);
   background: var(--color-accent);
   color: var(--color-on-accent);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: background var(--transition-fast);
@@ -178,11 +179,11 @@
 }
 
 .buyNowButton {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-5);
   background: var(--color-surface);
   color: var(--color-accent);
   border: 1.5px solid var(--color-accent);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   font-weight: var(--weight-semibold);
   cursor: pointer;
   transition:

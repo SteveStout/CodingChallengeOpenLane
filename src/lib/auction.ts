@@ -1,4 +1,5 @@
 import type { Vehicle } from './types';
+import { fnv1a } from './hash';
 import { formatCurrency } from './format';
 
 // ---------------------------------------------------------------------------
@@ -53,16 +54,6 @@ export interface AuctionWindow {
 
 export type AuctionStatus = 'upcoming' | 'live' | 'ended';
 
-/** FNV-1a 32-bit: a stable, well-distributed hash for seeding from ids. */
-function hashId(id: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
 function startOfLocalDay(epochMs: number): number {
   const day = new Date(epochMs);
   day.setHours(0, 0, 0, 0);
@@ -72,7 +63,7 @@ function startOfLocalDay(epochMs: number): number {
 /** Deterministic per id and calendar day; see the section comment above. */
 export function auctionWindow(id: string, now: number): AuctionWindow {
   const anchor = startOfLocalDay(now);
-  const hash = hashId(id);
+  const hash = fnv1a(id);
   const endFraction = (hash % 100_000) / 100_000;
   const durationFraction = (Math.floor(hash / 100_000) % 1_000) / 1_000;
   const endsAt = Math.round(anchor - SCHEDULE_LOOKBACK_MS + endFraction * SCHEDULE_SPAN_MS);

@@ -74,9 +74,9 @@ export default function App() {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <button type="button" className={styles.brand} onClick={backToInventory}>
-            <span className={styles.brandMark} aria-hidden="true">
-              ⚡
-            </span>
+            <svg className={styles.brandMark} viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M13 2 5 14h5l-2 8 8-12h-5l2-8z" fill="currentColor" />
+            </svg>
             The Block
             <span className={styles.brandSub}>Vehicle Auctions</span>
           </button>

@@ -22,7 +22,9 @@ npm run preview    # serve the production build
 ```
 
 The dataset ships in the repo (`data/vehicles.json`) and is bundled at build time — no
-backend or network needed.
+backend needed. Vehicle photos are vendored in `public/vehicles/` (network only improves
+the Poppins font, which falls back to system fonts offline). To refresh the photo set
+from Wikimedia Commons, run `node scripts/fetch_photos.mjs`.
 
 ## Time Spent
 
@@ -47,6 +49,10 @@ screenshots at desktop/tablet/mobile widths.
   there are no competing bidders advancing prices. "Reset bids" (header) clears the slate.
 - **Currency is CAD** (`en-CA`) since every listing is Canadian — one constant in
   `src/lib/format.ts` switches it.
+- **Photos are representative, not the actual lot.** 50 free-license photos (10 per body
+  style, modern generations) are fetched from Wikimedia Commons and mapped
+  deterministically per vehicle id, preferring photos of the vehicle's own make. Real
+  listings would use real lot photography; credits in `public/vehicles/CREDITS.md`.
 - Out of scope per the brief: auth, accounts, seller tooling, checkout, payments, backend,
   real-time multi-user bidding.
 
@@ -54,7 +60,10 @@ screenshots at desktop/tablet/mobile widths.
 
 - **Frontend:** React 19 + TypeScript (strict) on Vite; plain CSS via CSS Modules over a
   single design-token sheet (`src/styles/tokens.css`); Vitest for tests. No component,
-  icon, or CSS libraries — icons are small inline SVGs.
+  icon, or CSS libraries — icons are small inline SVGs. The visual language mirrors
+  openlane.com: Onward navy `#0A1B5F`, OPENLANE blue `#0061FF`, silver neutrals, pill
+  buttons, and Poppins (a Google Fonts stylesheet link — the one external asset — with a
+  system-font fallback).
 - **Backend:** none. `src/lib/data.ts` is the single seam that imports the JSON and
   returns typed `Vehicle[]` — a real API would plug in there.
 - **Database:** none (localStorage for the buyer's bids).
@@ -85,6 +94,10 @@ screenshots at desktop/tablet/mobile widths.
   presents as "Sold" with a purchase price everywhere.
 - **One clock at the app root** (`useNow`) drives every countdown and status, so a card
   and its detail view can never disagree about liveness.
+- **Photo mapping lives behind the data seam**: `src/lib/data.ts` swaps the dataset's
+  placeholder URLs for vendored stock photos via `src/lib/images.ts`, which prefers
+  same-make photos from the body-style pool. The JSON itself stays untouched, and a real
+  API's photo URLs would drop in at the same seam.
 
 ## Testing
 
