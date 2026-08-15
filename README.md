@@ -1,146 +1,107 @@
-<p align="center">
-  <img src="docs/the_block_repo.png" alt="The Block challenge hero image" width="960" />
-</p>
+# The Block — Buyer Prototype
 
-# The Block
+The buyer side of a used-vehicle auction platform, built for the OPENLANE coding challenge:
+browse 200 listings, inspect a vehicle in detail, and place bids. Frontend-only prototype.
+The original challenge brief is preserved in git history.
 
-### A coding challenge from OPENLANE
+## How to Run
 
----
+Requires Node 20+ (built on Node 24).
 
-OPENLANE powers one of the world's largest digital marketplaces for used vehicles. Every day, thousands of vehicles move through our platform - inspected, listed, auctioned, and sold. Your job is to interpret what we do and bring a working prototype to life.
-
-We're hiring for a team that builds fast, thinks independently, and takes ownership. This challenge is part of that process.
-
-## The Challenge
-
-Build the **buyer side of a vehicle auction platform as a web or mobile application**. We've included a dataset of 200 vehicles in [`data/vehicles.json`](data/vehicles.json), each listed by a selling dealership.
-
-A buyer should be able to browse inventory, inspect vehicle details, and place bids. That's the core experience. How you structure the product and how far you take it is up to you.
-
-## Core Requirements
-
-- Browse and search the vehicle inventory
-- Vehicle detail views with specs, condition, damage notes, selling dealership, and photos
-- A bidding experience where a buyer can place bids on vehicles
-- A usable experience that works well on the platform you choose
-- Clear instructions in your README for how to run the project locally
-
-## Assumptions You Can Make
-
-- This is a prototype, not a production launch.
-- Please spend no more than 3-4 hours of work on this. If you spend more, that's your call, but we do not expect a fully built marketplace.
-- Use any framework, language, or stack.
-- If you want stack examples that fit this challenge, React + Vite is a good web option, and SwiftUI for iOS or Compose for Android are reasonable native mobile examples. None of these are required.
-- You may use AI tools and coding assistants, and their use is encouraged. Be ready to explain how you used them, what decisions you made, and what parts of the implementation you would refine.
-- Authentication and user accounts are **not required**.
-- A frontend-only implementation is completely acceptable.
-- You do **not** need to build seller workflows, checkout, payments, or dealer admin tooling.
-- Auction timestamps in the dataset are synthetic scheduling data. If you want to show countdowns or "live" states, it's fine to normalize them relative to "now" in your prototype.
-- Make reasonable product decisions, document your assumptions, and optimize for clarity over surface area.
-
-## Minimum Bar
-
-At a minimum, we want to see:
-
-- Inventory browsing and search
-- A clear vehicle detail experience
-- A bid flow with updated visible state
-- A usable experience on desktop and mobile
-- A repo we can clone and run by following your README
-
-## Stretch Ideas
-
-These are optional. Only do them if the basics are solid.
-
-- We care more about judgment than about any specific extra feature.
-- If you go beyond the basics, focus on improvements that make the buyer experience clearer, more useful, or more trustworthy.
-- That could show up in product decisions, UX details, implementation quality, or any other thoughtful extension that fits the timebox.
-
-## What to Submit
-
-1. **Fork this repo** to your own GitHub account
-2. Complete the challenge work in your fork
-3. Include a **README** in your repo with setup instructions and notable decisions
-4. When you're finished, share the link to your repo with your contact at **OPENLANE**
-
-We've included a [submission template](SUBMISSION.md) if you want a starting point.
-
-We should be able to clone your repo and have it running locally by following your README.
-
-## Timeline
-
-You have **5 days** from when you receive this challenge to submit it.
-
-This is not a speed run. We care more about your decisions and tradeoffs than the total number of features.
-
-## What Happens Next
-
-After you submit, we'll schedule a **45-60 minute walkthrough** where you'll screen-share and walk us through what you built. More details are in [`WALKTHROUGH.md`](WALKTHROUGH.md).
-
-## How We Evaluate
-
-We're not checking boxes. Here's what we care about:
-
-| | What we're looking at |
-|---|---|
-| **Product thinking** | Did you make smart decisions about what to build and how it should work? Does the UX make sense? |
-| **Craft** | Does it look and feel intentional? The details matter - design, layout quality, polish. |
-| **Technical quality** | Is the code clean, well-structured, and easy to follow? |
-| **Judgment** | Did you scope the work well for the time budget and make sensible tradeoffs? |
-| **Workflow** | Can you walk us through how you built it and why? (assessed in the walkthrough) |
-
-## The Data
-
-The vehicle dataset is at [`data/vehicles.json`](data/vehicles.json). Each vehicle includes:
-
-- Lot number, VIN, make, model, year, and trim
-- Specs (engine, transmission, drivetrain, fuel type, odometer)
-- Condition (grade, report, damage notes, title status)
-- Auction details (starting bid, reserve price, buy now price, auction start time)
-- Current bid and bid count (some vehicles already have active bids)
-- Location (city and province)
-- Selling dealership
-- Placeholder image URLs
-
-Here's what a single vehicle looks like:
-
-```json
-{
-  "id": "3cc3b89e-68b0-479e-af39-bca6251ea0b4",
-  "vin": "TRD7L1KS0HNB5X3K3",
-  "year": 2023,
-  "make": "Ford",
-  "model": "Bronco",
-  "trim": "Big Bend",
-  "body_style": "SUV",
-  "exterior_color": "Burgundy",
-  "interior_color": "Beige",
-  "engine": "2.7L EcoBoost V6",
-  "transmission": "automatic",
-  "drivetrain": "4WD",
-  "odometer_km": 47731,
-  "fuel_type": "gasoline",
-  "condition_grade": 3.8,
-  "condition_report": "Average condition. Has some visible wear on high-touch surfaces. Engine and transmission perform within normal parameters.",
-  "damage_notes": [
-    "Scratch on liftgate",
-    "Minor rust on wheel wells",
-    "Paint peeling on roof rack"
-  ],
-  "title_status": "clean",
-  "province": "Ontario",
-  "city": "Toronto",
-  "auction_start": "2026-04-05T14:00:00",
-  "starting_bid": 14500,
-  "reserve_price": 25000,
-  "buy_now_price": null,
-  "images": ["https://placehold.co/800x600?text=2023+Ford+Bronco+Photo+1", "..."],
-  "selling_dealership": "King City Auto",
-  "lot": "A-0043",
-  "current_bid": 22800,
-  "bid_count": 16
-}
+```
+npm install
+npm run dev
 ```
 
-The data is synthetic but meant to feel realistic. Use it however you want. Should you need reasonable accommodation, please reach out to careers@openlane.com
+Open http://localhost:5173. Other scripts:
+
+```
+npm test           # unit tests (Vitest)
+npm run build      # typecheck + production bundle to dist/
+npm run preview    # serve the production build
+```
+
+The dataset ships in the repo (`data/vehicles.json`) and is bundled at build time — no
+backend or network needed.
+
+## Time Spent
+
+About 4 hours, built domain-first: types, auction rules, and tests before any UI, then the
+inventory grid, filters, detail view, bid flow, and a final polish pass against real
+screenshots at desktop/tablet/mobile widths.
+
+## Assumptions and Scope
+
+- **`current_bid` is null for 112 of 200 vehicles** (the ones with `bid_count: 0`). The
+  brief's example shows a number, but the data is authoritative: the type is
+  `number | null`. Before any bids exist, the minimum acceptable bid is the opening ask
+  (no increment), a reserve cannot be met, and the UI labels the price "Starting bid".
+- **Auction windows are derived, not read.** `auction_start` is synthetic, so each
+  vehicle's id hashes to an end time spread across two days before to five days after
+  "now" (anchored to local midnight), with a 2–4 day duration. Windows are stable across
+  reloads within a day and re-seed at midnight, so the inventory always shows a live mix
+  of ended, live, and upcoming auctions.
+- **A bid at or above the Buy Now price wins immediately at the Buy Now price**, even if
+  it would fail the minimum-increment check — the instant-win rule takes precedence.
+- **Single anonymous buyer.** Your bids persist in localStorage and mark you high bidder;
+  there are no competing bidders advancing prices. "Reset bids" (header) clears the slate.
+- **Currency is CAD** (`en-CA`) since every listing is Canadian — one constant in
+  `src/lib/format.ts` switches it.
+- Out of scope per the brief: auth, accounts, seller tooling, checkout, payments, backend,
+  real-time multi-user bidding.
+
+## Stack
+
+- **Frontend:** React 19 + TypeScript (strict) on Vite; plain CSS via CSS Modules over a
+  single design-token sheet (`src/styles/tokens.css`); Vitest for tests. No component,
+  icon, or CSS libraries — icons are small inline SVGs.
+- **Backend:** none. `src/lib/data.ts` is the single seam that imports the JSON and
+  returns typed `Vehicle[]` — a real API would plug in there.
+- **Database:** none (localStorage for the buyer's bids).
+
+## What I Built
+
+- **Inventory** — responsive card grid (3/2/1 across), token search over year, make,
+  model, and trim, filters for make, body style, title status, province, auction status,
+  minimum condition, and price range, five sorts (ending soonest with live first, price
+  both ways, condition, most bids), and a clear empty state.
+- **Detail view** — image gallery with thumbnails and graceful fallback art, full specs,
+  condition grade with report and damage notes, a warning banner for salvage or rebuilt
+  titles, seller and location, and the auction panel.
+- **Bidding** — live countdowns on a shared clock, tiered minimum increments, validation
+  with buyer-facing reasons, a persistent "You're the high bidder" state, Buy Now with a
+  distinct sold/purchase-price presentation, and bids that survive refresh.
+
+## Notable Decisions
+
+- **Domain rules live in pure functions** (`src/lib/auction.ts`), fully separate from
+  React — reserve state, window derivation, increments, validation, and bid resolution
+  are all unit-tested without rendering anything. Components stay thin.
+- **The reserve amount is never rendered** — only its state (No reserve / Reserve met /
+  Reserve not met), matching how real auction platforms guard seller data.
+- **Price filtering and sorting use the "competing price"** — the high bid, or the
+  opening ask when there are no bids — so unbid vehicles don't sort as free.
+- **Buy Now is a purchase, not a bid**: it doesn't inflate the bid count, and the vehicle
+  presents as "Sold" with a purchase price everywhere.
+- **One clock at the app root** (`useNow`) drives every countdown and status, so a card
+  and its detail view can never disagree about liveness.
+
+## Testing
+
+43 Vitest unit tests across the domain layer: reserve states including the null-reserve
+and no-bids cases, window stability/spread/status boundaries plus a guaranteed
+ended/live/upcoming mix, all three increment tiers, bid validation (below minimum, ended,
+upcoming, non-numeric), Buy Now precedence — including a test proven necessary by
+mutation (reordering the buy-now check silently passed the old suite) and a guard against
+`Infinity` instantly winning — plus search, filter, sort, and countdown formatting.
+
+## What I'd Do With More Time
+
+- Simulated competing bidders so the high-bidder state can be lost, with outbid alerts
+- URL-driven state (real router) for shareable filtered views and vehicle links
+- Watchlist and recently-viewed, persisted alongside bids
+- Memoized cards or a virtualized grid — today the whole visible grid re-renders on the
+  shared 1-second clock, fine at 200 vehicles but not at 20,000
+- Component and E2E tests (Testing Library / Playwright) on top of the unit suite
+- A real image pipeline (srcset, blur-up placeholders) once photography replaces
+  placeholders
