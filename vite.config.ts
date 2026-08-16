@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -20,5 +21,9 @@ export default defineConfig({
   },
   preview: {
     proxy: apiProxy,
+  },
+  test: {
+    // Unit tests only — tests/e2e belongs to Playwright.
+    include: ['src/**/*.test.ts'],
   },
 });

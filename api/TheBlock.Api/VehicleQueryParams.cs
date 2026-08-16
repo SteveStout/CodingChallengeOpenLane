@@ -18,19 +18,19 @@ public sealed record VehicleQueryParams(
     string? Status,
     string? Sort,
     int? Limit,
+    int? Offset,
     [FromQuery(Name = "anchor_ms")] long? AnchorMs,
     [FromQuery(Name = "min_condition")] double? MinCondition,
     [FromQuery(Name = "price_min")] double? PriceMin,
     [FromQuery(Name = "price_max")] double? PriceMax)
 {
-    /// <summary>A real client's midnight anchor is always within a day or two of now.</summary>
-    private const long MaxAnchorDriftMs = 2L * 24 * 60 * 60 * 1000;
-
     /// <summary>The landing page shows the top 100; clients may ask for up to 500.</summary>
     public const int DefaultLimit = 100;
     private const int MaxLimit = 500;
 
     public int EffectiveLimit => Math.Clamp(Limit ?? DefaultLimit, 1, MaxLimit);
+
+    public int EffectiveOffset => Math.Max(Offset ?? 0, 0);
 
     public bool TryBuildFilter(
         out VehicleFilter filter,
@@ -40,24 +40,10 @@ public sealed record VehicleQueryParams(
     {
         filter = new VehicleFilter();
         sort = VehicleSort.EndingSoonest;
-        var utcNow = DateTimeOffset.UtcNow;
 
-        // The client sends its own local-midnight anchor so server-side status
-        // filtering agrees with the browser's rendering across timezones and
-        // DST. Without one, fall back to the server's local midnight.
-        if (AnchorMs is { } anchor)
+        if (!Clocks.TryResolve(AnchorMs, out clock, out error))
         {
-            if (Math.Abs(anchor - utcNow.ToUnixTimeMilliseconds()) > MaxAnchorDriftMs)
-            {
-                clock = default;
-                error = "anchor_ms must be within two days of the current time.";
-                return false;
-            }
-            clock = new AuctionClock(utcNow.ToUnixTimeMilliseconds(), anchor);
-        }
-        else
-        {
-            clock = AuctionClock.ServerLocal(utcNow, TimeZoneInfo.Local);
+            return false;
         }
 
         // Explicit name matching — Enum.TryParse would also accept numeric

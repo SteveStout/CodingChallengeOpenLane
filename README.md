@@ -1,8 +1,9 @@
 # The Block — Buyer Prototype
 
 The buyer side of a used-vehicle auction platform, built for the OPENLANE coding challenge:
-browse 200 listings, inspect a vehicle in detail, and place bids. React frontend backed by
-a small read-only .NET API. The original challenge brief is preserved in git history.
+browse 100,000 listings, inspect a vehicle in detail, and place bids. React frontend backed
+by a .NET 10 API that owns the data, the search, and the auction rules. The original
+challenge brief is preserved in git history.
 
 ## How to Run
 
@@ -10,9 +11,10 @@ Requires Node 20+ (built on Node 24) and the .NET 10 SDK.
 
 ```
 npm install
-npm run api        # terminal 1 — .NET API on http://localhost:5210
-npm run dev        # terminal 2 — Vite dev server
+npm start          # API + frontend in one command; opens the browser
 ```
+
+(Or separately: `npm run api` and `npm run dev` in two terminals.)
 
 Open http://localhost:5173. The dev server proxies `/api` to the .NET API, which serves
 the inventory and the vehicle photos (`/api/images/...`). The inventory is **100,000
@@ -25,21 +27,33 @@ the landing page is the top 100 by auction time (live, ending soonest first):
 GET /api/vehicles?make=Ford&status=live&sort=price-asc&limit=100
 ```
 
-Parameters: `q`, `make`, `body_style`, `title_status`, `province`, `status` (+
-`anchor_ms`), `min_condition`, `price_min`, `price_max`, `sort` (ending-soonest,
-price-asc, price-desc, condition, most-bids), `limit` (default 100, max 500). Responses
-are an envelope `{ total, vehicles }`; invalid `status`/`sort`/`anchor_ms` return 400.
-`GET /api/vehicles/{id}` fetches one vehicle; `GET /api/facets` feeds the filter
-dropdowns from the full dataset. If the API isn't running, the app shows a clear error
-state with a retry.
+Parameters: `q` (matches every filterable field, including derived auction status),
+`make`, `body_style`, `title_status`, `province`, `status` (+ `anchor_ms`),
+`min_condition`, `price_min`, `price_max`, `sort` (ending-soonest, price-asc,
+price-desc, condition, most-bids), `limit` (default 100, max 500), `offset`. Responses
+are an envelope `{ total, vehicles }`, each vehicle carrying server-derived auction
+facts (`auction_starts_at`, `auction_ends_at`, `auction_status`, `min_next_bid`);
+invalid `status`/`sort`/`anchor_ms` return 400. `GET /api/vehicles/{id}` fetches one
+vehicle; `GET /api/facets` feeds the filter dropdowns from the full dataset.
+
+Bidding is server-side and validated by the domain rules:
+`POST /api/vehicles/{id}/bids` `{ amount, anchor_ms }` → accepted/won or 400 with a
+reason; `POST /api/vehicles/{id}/buy-now`; `GET /api/bids` (the single anonymous
+buyer's standing); `DELETE /api/bids` (reset). Bid state lives in API memory and is
+overlaid on vehicles BEFORE filtering, so price filters see what the UI shows. If the
+API isn't running, the app shows a clear error state with a retry.
 
 Other scripts:
 
 ```
-npm test           # unit tests (Vitest)
+npm test           # frontend unit tests (Vitest)
+npm run test:api   # API unit + integration tests (xUnit)
+npm run test:e2e   # end-to-end smokes (Playwright; starts both servers itself)
 npm run build      # typecheck + production bundle to dist/
 npm run preview    # serve the production build
 ```
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs all three suites on every push.
 
 To refresh the photo set from Wikimedia Commons, run `node scripts/fetch_photos.mjs`.
 
@@ -70,11 +84,10 @@ screenshots at desktop/tablet/mobile widths.
   style, modern generations) are fetched from Wikimedia Commons and mapped
   deterministically per vehicle id, preferring photos of the vehicle's own make. Real
   listings would use real lot photography; credits in `api/wwwroot/images/CREDITS.md`.
-- **The API is read-only.** It owns the dataset and photo mapping; bidding state stays
-  client-side in localStorage. Server-side bidding endpoints are the natural next step.
-  One consequence: price filters evaluate the *server's* bid figures, so a bid you just
-  placed locally isn't reflected in price-range filtering until bidding moves
-  server-side.
+- **The API owns everything**: data, filtering, sorting, paging, photo mapping, auction
+  scheduling, and bid validation. The browser formats, counts down, and relays actions.
+  Bid state is in API memory for a single anonymous buyer (no auth by design — isolated
+  demo); it survives browser reloads but not an API restart.
 - Out of scope per the brief: auth, accounts, seller tooling, checkout, payments, backend,
   real-time multi-user bidding.
 
@@ -93,21 +106,47 @@ screenshots at desktop/tablet/mobile widths.
   static images). Filtering is LINQ over GET parameters, including auction status —
   the window derivation is ported to C# with identical math so server filtering agrees
   with client rendering. `src/lib/data.ts` remains the frontend's single data seam.
-- **Database:** none (the API reads the JSON file; localStorage holds the buyer's bids).
+- **Database:** none (the API reads the JSON file; bid state lives in API memory).
 
 ## What I Built
 
 - **Inventory** — responsive card grid (3/2/1 across), token search over year, make,
   model, and trim, filters for make, body style, title status, province, auction status,
   minimum condition, and price range — all applied server-side (debounced GET requests),
-  five client-side sorts (ending soonest with live first, price both ways, condition,
-  most bids), and a clear empty state.
+  five server-side sorts (ending soonest with live first, price both ways, condition,
+  most bids), Load More paging, and a clear empty state.
 - **Detail view** — image gallery with thumbnails and graceful fallback art, full specs,
   condition grade with report and damage notes, a warning banner for salvage or rebuilt
   titles, seller and location, and the auction panel.
 - **Bidding** — live countdowns on a shared clock, tiered minimum increments, validation
   with buyer-facing reasons, a persistent "You're the high bidder" state, Buy Now with a
   distinct sold/purchase-price presentation, and bids that survive refresh.
+
+## Strengths
+
+- **GET-parameter-driven filtering.** Every filter, the text search, sorting, and paging
+  are query parameters on `GET /api/vehicles`, applied server-side with LINQ — and the
+  browser's address bar mirrors the same parameters, so any filtered view is shareable
+  and bookmarkable.
+- **Debounced, cached requests.** Filter changes debounce 500 ms so typing doesn't
+  hammer the API, and responses are cached per query string (5-minute TTL, bounded).
+  Cache hits skip the debounce entirely — the delay only exists to protect the server,
+  and a hit never touches it.
+- **Server-side pagination at scale.** 100,000 records, but the wire only ever carries a
+  page: an envelope of `{ total, vehicles }` with `limit`/`offset`, a landing page of
+  the top 100 by auction time, and Load More to walk deeper.
+- **One authoritative home for every business rule.** Auction windows, status, minimum
+  increments, bid validation, buy-now precedence — all live in `TheBlock.Domain` and
+  nowhere else. The wire carries the derived facts (`auction_ends_at`, `min_next_bid`,
+  …) so the browser only formats and counts down. This wasn't free: early versions
+  mirrored the math in TypeScript, and cross-language drift bit twice (a timezone
+  anchor, then DST) before the consolidation — the architecture exists because the bug
+  class it eliminates actually happened.
+- **Onion architecture that earns its layers.** Domain has zero dependencies;
+  Application talks through ports (`IVehicleSource`, `IPhotoManifestSource`);
+  Infrastructure adapts files; the host only binds and serializes. The proof it's not
+  ceremony: the 100k scale-up is a decorator on a port (`SyntheticVehicleSource`) —
+  nothing above it changed — and the test suite swaps in-memory fakes at the same seams.
 
 ## Notable Decisions
 
@@ -134,31 +173,57 @@ screenshots at desktop/tablet/mobile widths.
 
 ## Testing
 
-**Frontend (46 Vitest tests):** reserve states including the null-reserve and no-bids
-cases, window stability/spread/status boundaries plus a guaranteed ended/live/upcoming
-mix, all three increment tiers, bid validation (below minimum, ended, upcoming,
-non-numeric), Buy Now precedence — including a test proven necessary by mutation
-(reordering the buy-now check silently passed the old suite) and a guard against
-`Infinity` instantly winning — plus sorting, facets, query-parameter mapping, and
-countdown formatting. Run with `npm test`.
-
-**API (57 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
+**API (80 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
 domain (photo gallery determinism and make preference, FNV-1a known vectors, auction
-schedule bounds and boundaries, every filter rule), application (`InventoryService` with
-in-memory fakes standing in for the file adapters), infrastructure (snake_case
-deserialization plus the real dataset and manifest), and integration tests that boot the
-real host in-memory (`WebApplicationFactory`) to verify endpoints, filtering parameters,
-the 400 path, and static image serving. Run with `npm run test:api`.
+schedule bounds and boundaries, every filter rule, bid rules including increment tiers
+and buy-now precedence), application (`InventoryService`/`BidService` with in-memory
+fakes standing in for the file adapters), infrastructure (snake_case deserialization,
+the synthetic 100k expansion's invariants, the real dataset and manifest), and
+integration tests that boot the real host in-memory (`WebApplicationFactory`) to verify
+endpoints, filtering/sorting/paging parameters, the 400 paths, the full bid lifecycle,
+and static image serving. Run with `npm run test:api`.
+
+**Frontend (27 Vitest tests):** presentation logic only, since the API owns the rules —
+status recomputation from server windows, reserve states, formatting and countdowns,
+URL/filter round-tripping, query-parameter mapping, and the request cache (TTL, per-key,
+forced bypass, no caching of failures). Run with `npm test`.
+
+**End-to-end (4 Playwright smokes):** the real stack — landing page shows 100 of
+100,000, filtering syncs the URL both directions, Load More appends a page, and a bid
+round-trips through the API, survives a reload, and resets. Run with `npm run test:e2e`.
+All three suites run in CI on every push.
 
 ## What I'd Do With More Time
 
-- Move bidding server-side (`POST /api/vehicles/{id}/bids`) so validation and state live
-  in one place instead of duplicated client-side
+In priority order:
+
+1. **Consistent coding and commenting styles, documented** — `docs/STYLE.md` (naming,
+   layering rules, comments that explain *why and how*, never *what*) and
+   `docs/ARCHITECTURE.md` (the onion, the wire contract, the derive-don't-store
+   principle), enforced with `.editorconfig` and formatters rather than convention alone.
+2. **Error handling** — a global exception handler returning RFC 7807 ProblemDetails
+   (unhandled exceptions currently surface as shapeless 500s), one unified 400 body
+   (queries return `{ error }`, bids return `{ reason }` today), structured request
+   logging, and a React error boundary so a render crash degrades instead of
+   white-screening.
+3. **Code review** — a full adversarial review pass against the written style guide; the
+   codebase has roughly tripled since the last one.
+4. **Hosting (AWS or Azure)** — likely Azure App Service as a single deployable, with
+   the API serving the built SPA: the frontend already calls relative `/api` paths, so
+   same-origin hosting needs no code changes, and a single instance matches the
+   in-memory bid state honestly.
+
+And beyond that:
+
+- Real-time updates (Server-Sent Events): push bid changes and auction closes so
+  countdowns rotate expired rows out and "you've been outbid" moments become possible
+- Auth and per-user bid state, persisted — the single anonymous in-memory buyer is the
+  demo shortcut
 - Simulated competing bidders so the high-bidder state can be lost, with outbid alerts
-- URL-driven state (real router) for shareable filtered views and vehicle links
-- Watchlist and recently-viewed, persisted alongside bids
-- Memoized cards or a virtualized grid — today the whole visible grid re-renders on the
-  shared 1-second clock, fine at 200 vehicles but not at 20,000
-- Component and E2E tests (Testing Library / Playwright) on top of the unit suite
-- A real image pipeline (srcset, blur-up placeholders) once photography replaces
-  placeholders
+- Search indexing: precompute each vehicle's lowercase haystack at startup instead of
+  rebuilding it per request (the biggest lever on the ~300 ms full-scan query)
+- A virtualized grid once Load More accumulates thousands of rows
+- Focus management on view switches (the detail page should receive keyboard focus),
+  plus a fuller accessibility audit
+- A real image pipeline (srcset, blur-up placeholders) once photography replaces the
+  representative stock photos

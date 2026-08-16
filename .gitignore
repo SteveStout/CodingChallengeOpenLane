@@ -7,3 +7,5 @@ node_modules/
 dist/
 api/**/bin/
 api/**/obj/
+playwright-report/
+test-results/

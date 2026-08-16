@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Vehicle } from '../lib/types';
-import { auctionTiming, reserveState, type BidOutcome } from '../lib/auction';
+import { auctionTiming, reserveState } from '../lib/auction';
+import type { BidOutcome } from '../lib/data';
 import { capitalize, formatOdometer } from '../lib/format';
 import { AuctionCountdown } from './AuctionCountdown';
 import { BidPanel } from './BidPanel';
@@ -16,8 +17,8 @@ interface VehicleDetailProps {
   onBack: () => void;
   isHighBidder: boolean;
   wonBuyNow: boolean;
-  onPlaceBid: (amount: number) => BidOutcome;
-  onBuyNow: () => BidOutcome;
+  onPlaceBid: (amount: number) => Promise<BidOutcome>;
+  onBuyNow: () => Promise<BidOutcome>;
 }
 
 export function VehicleDetail({

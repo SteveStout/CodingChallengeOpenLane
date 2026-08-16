@@ -40,4 +40,13 @@ export interface Vehicle {
   /** null until the first bid is placed (bid_count === 0). */
   current_bid: number | null;
   bid_count: number;
+
+  // --- Server-derived auction facts, appended by the API (VehicleWire) ---
+  /** Auction window as epoch ms; the browser only formats and counts down. */
+  auction_starts_at: number;
+  auction_ends_at: number;
+  /** Status at the moment the server answered; recompute from the window as time passes. */
+  auction_status: 'upcoming' | 'live' | 'ended';
+  /** The minimum acceptable bid right now, per the server's rules. */
+  min_next_bid: number;
 }

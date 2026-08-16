@@ -63,6 +63,12 @@
   font-weight: var(--weight-medium);
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .resetBids {
   appearance: none;
   background: var(--color-surface);
@@ -179,6 +185,38 @@
 
 .staleRetry:focus-visible {
   outline: 2px solid var(--color-warning);
+  outline-offset: 2px;
+}
+
+.loadMoreRow {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-6);
+}
+
+.loadMore {
+  padding: var(--space-2) var(--space-6);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  border: 1.5px solid var(--color-accent);
+  border-radius: var(--radius-full);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.loadMore:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.loadMore:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.loadMore:focus-visible {
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 

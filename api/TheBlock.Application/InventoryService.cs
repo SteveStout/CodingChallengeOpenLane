@@ -30,18 +30,27 @@ public sealed class InventoryService(
 
     /// <summary>
     /// Vehicles matching <paramref name="filter"/> (statuses derived from
-    /// <paramref name="clock"/>), ordered by <paramref name="sort"/>, with the
-    /// page capped at <paramref name="limit"/>. Total counts every match.
+    /// <paramref name="clock"/>), ordered by <paramref name="sort"/>, paged by
+    /// <paramref name="limit"/>/<paramref name="offset"/>. Total counts every
+    /// match. <paramref name="overlay"/> (the buyer's bids) is applied BEFORE
+    /// filtering, so price bounds see the same figures the UI displays.
     /// </summary>
     public SearchResult Search(
         VehicleFilter filter,
         AuctionClock clock,
         VehicleSort sort = VehicleSort.EndingSoonest,
-        int limit = int.MaxValue)
+        int limit = int.MaxValue,
+        int offset = 0,
+        Func<Vehicle, Vehicle>? overlay = null)
     {
-        var matched = GetAll().Where(vehicle => filter.Matches(vehicle, clock));
+        IEnumerable<Vehicle> source = GetAll();
+        if (overlay is not null)
+        {
+            source = source.Select(overlay);
+        }
+        var matched = source.Where(vehicle => filter.Matches(vehicle, clock));
         var ordered = VehicleOrdering.Sort(matched, sort, clock).ToList();
-        return new SearchResult(ordered.Count, ordered.Take(limit).ToList());
+        return new SearchResult(ordered.Count, ordered.Skip(offset).Take(limit).ToList());
     }
 
     /// <summary>Distinct values feeding the UI's filter dropdowns, sorted.</summary>

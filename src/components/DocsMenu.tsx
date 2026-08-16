@@ -1,0 +1,125 @@
+import { useEffect, useRef, useState } from 'react';
+import { marked } from 'marked';
+import styles from './DocsMenu.module.css';
+
+/**
+ * The header's About dropdown: view the project README in-app (markdown,
+ * served by the API) or open the author's résumé PDF in a new tab.
+ */
+export function DocsMenu() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [readmeHtml, setReadmeHtml] = useState<string | null>(null);
+  const [readmeError, setReadmeError] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  // Close the dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
+
+  const openReadme = async () => {
+    setMenuOpen(false);
+    dialogRef.current?.showModal();
+    if (readmeHtml !== null) return;
+    try {
+      const response = await fetch('/api/docs/readme');
+      if (!response.ok) throw new Error(String(response.status));
+      const markdown = await response.text();
+      // Our own README — trusted, repo-authored content.
+      setReadmeHtml(await marked.parse(markdown));
+    } catch {
+      setReadmeError(true);
+    }
+  };
+
+  return (
+    <div className={styles.wrap} ref={menuRef}>
+      <button
+        type="button"
+        className={styles.trigger}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        About
+        <svg viewBox="0 0 12 8" width="10" height="7" aria-hidden="true">
+          <path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {menuOpen && (
+        <div className={styles.menu} role="menu">
+          <button type="button" className={styles.item} role="menuitem" onClick={() => void openReadme()}>
+            Project README
+          </button>
+          <a
+            className={styles.item}
+            role="menuitem"
+            href="/api/docs/resume"
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            Steven's résumé (PDF)
+            <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+              <path
+                d="M4.5 1.5h6v6M10.5 1.5 5 7M8 10.5H1.5V4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </a>
+        </div>
+      )}
+
+      <dialog
+        ref={dialogRef}
+        className={styles.dialog}
+        aria-label="Project README"
+        onClick={(event) => {
+          // Native dialog: a click on the backdrop targets the dialog itself.
+          if (event.target === dialogRef.current) dialogRef.current?.close();
+        }}
+      >
+        <div className={styles.dialogHeader}>
+          <h2 className={styles.dialogTitle}>README</h2>
+          <button
+            type="button"
+            className={styles.close}
+            onClick={() => dialogRef.current?.close()}
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+              <path d="M2 2l10 10M12 2 2 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <div className={styles.dialogBody}>
+          {readmeError ? (
+            <p className={styles.docError}>Couldn't load the README — is the API running?</p>
+          ) : readmeHtml === null ? (
+            <p className={styles.docLoading}>Loading…</p>
+          ) : (
+            <div className={styles.prose} dangerouslySetInnerHTML={{ __html: readmeHtml }} />
+          )}
+        </div>
+      </dialog>
+    </div>
+  );
+}

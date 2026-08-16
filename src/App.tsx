@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchFacets,
   fetchVehicles,
@@ -16,6 +16,7 @@ import {
 } from './lib/inventory';
 import { applyBidRecord, useBids } from './hooks/useBids';
 import { useNow } from './hooks/useNow';
+import { DocsMenu } from './components/DocsMenu';
 import { FilterBar } from './components/FilterBar';
 import { InventoryGrid } from './components/InventoryGrid';
 import { VehicleDetail } from './components/VehicleDetail';
@@ -28,6 +29,11 @@ const FILTER_DEBOUNCE_MS = 500;
 
 /** A status-filtered list goes stale as auctions cross their boundaries; refresh this often. */
 const STATUS_REFRESH_MS = 60_000;
+
+/** `npm start` opens the browser before the API finishes booting — keep
+ *  retrying the first load quietly for a while before declaring an error. */
+const INITIAL_RETRY_MS = 2_000;
+const MAX_INITIAL_RETRIES = 15;
 
 const EMPTY_FACETS: InventoryFacets = { makes: [], body_styles: [], title_statuses: [], provinces: [] };
 const EMPTY_PAGE: VehiclePage = { total: 0, vehicles: [] };
@@ -47,8 +53,17 @@ export default function App() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [filters, setFilters] = useState<InventoryFilters>(INITIAL_URL_STATE.filters);
   const [sort, setSort] = useState<SortKey>(INITIAL_URL_STATE.sort);
+  const [loadingMore, setLoadingMore] = useState(false);
   const now = useNow();
-  const { vehicles: visibleVehicles, bids, placeBid, buyNow, resetBids } = useBids(page.vehicles);
+  // Bid state lives in the API; refetch the list whenever it changes.
+  const refreshList = useCallback(() => setReloadNonce((n) => n + 1), []);
+  const { bids, placeBid, buyNow, resetBids } = useBids(refreshList);
+
+  /** The current page with the buyer's bids layered on for instant feedback. */
+  const visibleVehicles = useMemo(
+    () => page.vehicles.map((vehicle) => applyBidRecord(vehicle, bids[vehicle.id])),
+    [page.vehicles, bids]
+  );
 
   // Dropdown options come from the API (the page only ever holds a slice of
   // the dataset). Missing facets degrade to empty dropdowns, not a crash.
@@ -66,8 +81,10 @@ export default function App() {
   // exists to simulate not hammering the server. reloadNonce bumps are
   // refreshes (retry buttons, the status interval): immediate and uncached.
   const lastNonce = useRef(reloadNonce);
+  const initialAttempts = useRef(0);
   useEffect(() => {
     const controller = new AbortController();
+    let retryTimer: number | undefined;
     const isRefresh = reloadNonce !== lastNonce.current;
     lastNonce.current = reloadNonce;
     const firstLoad = loadState !== 'ready';
@@ -86,20 +103,35 @@ export default function App() {
       () => {
         fetchVehicles(filters, { sort, signal: controller.signal, forceRefresh: isRefresh })
           .then((data) => {
+            initialAttempts.current = 0;
             setPage(data);
             setStaleResults(false);
             if (firstLoad) setLoadState('ready');
           })
           .catch(() => {
             if (controller.signal.aborted) return;
-            if (firstLoad) setLoadState('error');
-            else setStaleResults(true);
+            if (firstLoad) {
+              // The API may still be booting (npm start opens the browser
+              // first) — keep retrying quietly before showing the error.
+              if (initialAttempts.current < MAX_INITIAL_RETRIES) {
+                initialAttempts.current += 1;
+                retryTimer = window.setTimeout(
+                  () => setReloadNonce((n) => n + 1),
+                  INITIAL_RETRY_MS
+                );
+                return;
+              }
+              setLoadState('error');
+            } else {
+              setStaleResults(true);
+            }
           });
       },
       firstLoad || isRefresh ? 0 : FILTER_DEBOUNCE_MS
     );
     return () => {
       window.clearTimeout(timer);
+      window.clearTimeout(retryTimer);
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,9 +155,29 @@ export default function App() {
 
   const highBidderIds = useMemo(() => new Set(Object.keys(bids)), [bids]);
   const wonIds = useMemo(
-    () => new Set(Object.entries(bids).filter(([, b]) => b.wonBuyNow).map(([id]) => id)),
+    () => new Set(Object.entries(bids).filter(([, b]) => b.won_buy_now).map(([id]) => id)),
     [bids]
   );
+
+  /** Appends the next server page; filters/sort changes reset via the fetch effect. */
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await fetchVehicles(filters, { sort, offset: page.vehicles.length });
+      setPage((prev) => {
+        const seen = new Set(prev.vehicles.map((v) => v.id));
+        return {
+          total: next.total,
+          vehicles: [...prev.vehicles, ...next.vehicles.filter((v) => !seen.has(v.id))],
+        };
+      });
+    } catch {
+      setStaleResults(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   /** The snapshot with the buyer's live bid state layered on. */
   const selected = useMemo(
@@ -153,8 +205,22 @@ export default function App() {
 
   const handleResetBids = () => {
     if (window.confirm(`Clear your ${bidCount === 1 ? 'bid' : `${bidCount} bids`}? This can't be undone.`)) {
-      resetBids();
+      void resetBids();
     }
+  };
+
+  const handlePlaceBid = async (amount: number) => {
+    if (!selected) return { kind: 'rejected' as const, reason: 'No vehicle selected.' };
+    const result = await placeBid(selected, amount);
+    if (result.vehicle) setSelectedVehicle(result.vehicle);
+    return result.outcome;
+  };
+
+  const handleBuyNow = async () => {
+    if (!selected) return { kind: 'rejected' as const, reason: 'No vehicle selected.' };
+    const result = await buyNow(selected);
+    if (result.vehicle) setSelectedVehicle(result.vehicle);
+    return result.outcome;
   };
 
   return (
@@ -168,11 +234,14 @@ export default function App() {
             The Block
             <span className={styles.brandSub}>Vehicle Auctions</span>
           </button>
-          {bidCount > 0 && (
-            <button type="button" className={styles.resetBids} onClick={handleResetBids}>
-              Reset bids ({bidCount})
-            </button>
-          )}
+          <div className={styles.headerActions}>
+            <DocsMenu />
+            {bidCount > 0 && (
+              <button type="button" className={styles.resetBids} onClick={handleResetBids}>
+                Reset bids ({bidCount})
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -191,7 +260,10 @@ export default function App() {
             <button
               type="button"
               className={styles.retry}
-              onClick={() => setReloadNonce((n) => n + 1)}
+              onClick={() => {
+                initialAttempts.current = 0;
+                setReloadNonce((n) => n + 1);
+              }}
             >
               Try again
             </button>
@@ -204,8 +276,8 @@ export default function App() {
             onBack={backToInventory}
             isHighBidder={highBidderIds.has(selected.id)}
             wonBuyNow={wonIds.has(selected.id)}
-            onPlaceBid={(amount) => placeBid(selected, amount)}
-            onBuyNow={() => buyNow(selected)}
+            onPlaceBid={handlePlaceBid}
+            onBuyNow={handleBuyNow}
           />
         ) : (
           <section aria-label="Vehicle inventory">
@@ -245,6 +317,18 @@ export default function App() {
               wonIds={wonIds}
               onClearFilters={clearFilters}
             />
+            {page.vehicles.length < page.total && (
+              <div className={styles.loadMoreRow}>
+                <button
+                  type="button"
+                  className={styles.loadMore}
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Loading…' : 'Load more vehicles'}
+                </button>
+              </div>
+            )}
           </section>
         )}
       </main>

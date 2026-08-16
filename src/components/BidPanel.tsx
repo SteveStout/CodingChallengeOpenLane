@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import type { Vehicle } from '../lib/types';
-import {
-  auctionTiming,
-  canBuyNow,
-  currentPrice,
-  minNextBid,
-  reserveState,
-  type BidOutcome,
-} from '../lib/auction';
+import { auctionTiming, currentPrice, reserveState } from '../lib/auction';
+import type { BidOutcome } from '../lib/data';
 import { formatCountdown, formatCurrency } from '../lib/format';
 import { AuctionCountdown } from './AuctionCountdown';
 import { ReserveBadge } from './ReserveBadge';
@@ -19,25 +13,36 @@ interface BidPanelProps {
   now: number;
   isHighBidder: boolean;
   wonBuyNow: boolean;
-  onPlaceBid: (amount: number) => BidOutcome;
-  onBuyNow: () => BidOutcome;
+  /** Bids are validated by the API; these resolve to its verdict. */
+  onPlaceBid: (amount: number) => Promise<BidOutcome>;
+  onBuyNow: () => Promise<BidOutcome>;
 }
 
 export function BidPanel({ vehicle, now, isHighBidder, wonBuyNow, onPlaceBid, onBuyNow }: BidPanelProps) {
   const [amountInput, setAmountInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   const timing = auctionTiming(vehicle, now);
   // A buy-now purchase ends the auction immediately, whatever the clock says.
   const status = wonBuyNow ? 'ended' : timing.status;
   const hasBids = vehicle.current_bid !== null;
-  const min = minNextBid(vehicle);
+  const min = vehicle.min_next_bid;
   const reserve = reserveState(vehicle);
   const wonAtClose = status === 'ended' && isHighBidder && (reserve === 'met' || reserve === 'no-reserve');
+  const canBuyNow = status === 'live' && vehicle.buy_now_price !== null;
 
-  const submitBid = (event: React.FormEvent) => {
+  const submitBid = async (event: { preventDefault(): void }) => {
     event.preventDefault();
-    const outcome = onPlaceBid(Number(amountInput));
+    if (pending) return;
+    const amount = Number(amountInput);
+    if (!Number.isFinite(amount)) {
+      setError('Enter a valid bid amount.');
+      return;
+    }
+    setPending(true);
+    const outcome = await onPlaceBid(amount);
+    setPending(false);
     if (outcome.kind === 'rejected') {
       setError(outcome.reason);
     } else {
@@ -47,8 +52,11 @@ export function BidPanel({ vehicle, now, isHighBidder, wonBuyNow, onPlaceBid, on
     }
   };
 
-  const handleBuyNow = () => {
-    const outcome = onBuyNow();
+  const handleBuyNow = async () => {
+    if (pending) return;
+    setPending(true);
+    const outcome = await onBuyNow();
+    setPending(false);
     setError(outcome.kind === 'rejected' ? outcome.reason : null);
   };
 
@@ -125,8 +133,8 @@ export function BidPanel({ vehicle, now, isHighBidder, wonBuyNow, onPlaceBid, on
                   }}
                 />
               </div>
-              <button type="submit" className={styles.bidButton}>
-                Place bid
+              <button type="submit" className={styles.bidButton} disabled={pending}>
+                {pending ? 'Placing…' : 'Place bid'}
               </button>
             </div>
           </form>
@@ -137,10 +145,15 @@ export function BidPanel({ vehicle, now, isHighBidder, wonBuyNow, onPlaceBid, on
             </p>
           )}
 
-          {canBuyNow(vehicle, now) && vehicle.buy_now_price !== null && (
+          {canBuyNow && vehicle.buy_now_price !== null && (
             <div className={styles.buyNow}>
               <span className={styles.buyNowDivider}>or</span>
-              <button type="button" className={styles.buyNowButton} onClick={handleBuyNow}>
+              <button
+                type="button"
+                className={styles.buyNowButton}
+                onClick={handleBuyNow}
+                disabled={pending}
+              >
                 Buy now for {formatCurrency(vehicle.buy_now_price)}
               </button>
             </div>
