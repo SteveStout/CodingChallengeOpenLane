@@ -15,13 +15,23 @@ npm run dev        # terminal 2 — Vite dev server
 ```
 
 Open http://localhost:5173. The dev server proxies `/api` to the .NET API, which serves
-the inventory JSON and the vehicle photos (`/api/images/...`). All filtering is
-server-side via LINQ over GET parameters — e.g.
-`GET /api/vehicles?make=Ford&body_style=SUV&status=live&price_max=30000&q=bronco`
-(`q`, `make`, `body_style`, `title_status`, `province`, `status`, `min_condition`,
-`price_min`, `price_max`; unknown `status` values return 400). `GET /api/vehicles/{id}`
-fetches one vehicle. If the API isn't running, the app shows a clear error state with a
-retry.
+the inventory and the vehicle photos (`/api/images/...`). The inventory is **100,000
+records**, deterministically synthesized at startup from the 200-record seed dataset
+(`Inventory:TargetCount` in `api/TheBlock.Api/appsettings.json`) — no giant file in the
+repo. All filtering, sorting, and paging are server-side via LINQ over GET parameters;
+the landing page is the top 100 by auction time (live, ending soonest first):
+
+```
+GET /api/vehicles?make=Ford&status=live&sort=price-asc&limit=100
+```
+
+Parameters: `q`, `make`, `body_style`, `title_status`, `province`, `status` (+
+`anchor_ms`), `min_condition`, `price_min`, `price_max`, `sort` (ending-soonest,
+price-asc, price-desc, condition, most-bids), `limit` (default 100, max 500). Responses
+are an envelope `{ total, vehicles }`; invalid `status`/`sort`/`anchor_ms` return 400.
+`GET /api/vehicles/{id}` fetches one vehicle; `GET /api/facets` feeds the filter
+dropdowns from the full dataset. If the API isn't running, the app shows a clear error
+state with a retry.
 
 Other scripts:
 
@@ -112,6 +122,11 @@ screenshots at desktop/tablet/mobile widths.
   presents as "Sold" with a purchase price everywhere.
 - **One clock at the app root** (`useNow`) drives every countdown and status, so a card
   and its detail view can never disagree about liveness.
+- **Query requests are debounced (500 ms) and cached (5 min, per query string,
+  bounded)** in the data seam. The debounce only exists to avoid hammering the API, so
+  cache hits skip it entirely — revisited filter combinations render instantly. Refresh
+  paths (retry buttons, the periodic status-filter refresh) bypass the cache; photos
+  carry `Cache-Control: public, max-age=86400` so the browser's HTTP cache keeps them.
 - **Photo mapping lives behind the API**: `api/Program.cs` swaps the dataset's
   placeholder URLs for vendored stock photos, preferring same-make photos from the
   body-style pool. `data/vehicles.json` itself stays untouched, and the frontend simply
@@ -119,7 +134,7 @@ screenshots at desktop/tablet/mobile widths.
 
 ## Testing
 
-**Frontend (42 Vitest tests):** reserve states including the null-reserve and no-bids
+**Frontend (46 Vitest tests):** reserve states including the null-reserve and no-bids
 cases, window stability/spread/status boundaries plus a guaranteed ended/live/upcoming
 mix, all three increment tiers, bid validation (below minimum, ended, upcoming,
 non-numeric), Buy Now precedence — including a test proven necessary by mutation
@@ -127,7 +142,7 @@ non-numeric), Buy Now precedence — including a test proven necessary by mutati
 `Infinity` instantly winning — plus sorting, facets, query-parameter mapping, and
 countdown formatting. Run with `npm test`.
 
-**API (36 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
+**API (57 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
 domain (photo gallery determinism and make preference, FNV-1a known vectors, auction
 schedule bounds and boundaries, every filter rule), application (`InventoryService` with
 in-memory fakes standing in for the file adapters), infrastructure (snake_case

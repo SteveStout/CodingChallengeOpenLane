@@ -23,6 +23,32 @@ public class VehicleFilterTests
     }
 
     [Fact]
+    public void Query_tokens_match_every_filterable_field()
+    {
+        // SUV, clean title, Toronto, Ontario in the fixture.
+        var vehicle = TestData.Vehicle();
+
+        Assert.True(new VehicleFilter { Query = "suv" }.Matches(vehicle, Now));
+        Assert.True(new VehicleFilter { Query = "clean" }.Matches(vehicle, Now));
+        Assert.True(new VehicleFilter { Query = "ontario toronto" }.Matches(vehicle, Now));
+        Assert.True(new VehicleFilter { Query = "ford ontario clean suv" }.Matches(vehicle, Now));
+        Assert.False(new VehicleFilter { Query = "salvage" }.Matches(vehicle, Now));
+        Assert.False(new VehicleFilter { Query = "quebec" }.Matches(vehicle, Now));
+    }
+
+    [Fact]
+    public void Query_matches_the_derived_auction_status()
+    {
+        var vehicle = TestData.Vehicle();
+        string actual = AuctionSchedule.StatusFor(vehicle.Id, Now).ToString().ToLowerInvariant();
+        string other = actual == "live" ? "ended" : "live";
+
+        Assert.True(new VehicleFilter { Query = actual }.Matches(vehicle, Now));
+        Assert.True(new VehicleFilter { Query = $"ford {actual}" }.Matches(vehicle, Now));
+        Assert.False(new VehicleFilter { Query = other }.Matches(vehicle, Now));
+    }
+
+    [Fact]
     public void Exact_filters_compare_case_insensitively()
     {
         var vehicle = TestData.Vehicle(make: "Ford", bodyStyle: "SUV");

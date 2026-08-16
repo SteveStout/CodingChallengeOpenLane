@@ -24,6 +24,11 @@ export function formatCurrency(amount: number): string {
 
 const integerFormat = new Intl.NumberFormat(LOCALE);
 
+/** "100,000" — grouped whole number. */
+export function formatInteger(value: number): string {
+  return integerFormat.format(value);
+}
+
 /** "47,731 km" */
 export function formatOdometer(km: number): string {
   return `${integerFormat.format(km)} km`;

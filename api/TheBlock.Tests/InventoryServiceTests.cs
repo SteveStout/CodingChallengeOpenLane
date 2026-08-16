@@ -77,8 +77,36 @@ public class InventoryServiceTests
                 TestData.Vehicle(id: "kia", make: "Kia")),
             new FakeManifest(TestData.SuvPool));
 
-        Assert.Equal(["ford"], service.Search(new VehicleFilter { Make = "Ford" }, now).Select(v => v.Id));
-        Assert.Equal(2, service.Search(new VehicleFilter(), now).Count);
+        var fords = service.Search(new VehicleFilter { Make = "Ford" }, now);
+        Assert.Equal(1, fords.Total);
+        Assert.Equal(["ford"], fords.Vehicles.Select(v => v.Id));
+        Assert.Equal(2, service.Search(new VehicleFilter(), now).Total);
+    }
+
+    [Fact]
+    public void Search_pages_but_still_reports_the_full_total()
+    {
+        var now = TestData.ClockAt(new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.FromHours(-4)));
+        var seeds = Enumerable.Range(0, 25).Select(i => TestData.Vehicle(id: $"v-{i}")).ToArray();
+        var service = new InventoryService(new FakeVehicles(seeds), new FakeManifest(TestData.SuvPool));
+
+        var page = service.Search(new VehicleFilter(), now, VehicleSort.EndingSoonest, limit: 10);
+
+        Assert.Equal(25, page.Total);
+        Assert.Equal(10, page.Vehicles.Count);
+    }
+
+    [Fact]
+    public void Facets_return_sorted_distinct_values()
+    {
+        var service = new InventoryService(
+            new FakeVehicles(
+                TestData.Vehicle(id: "a", make: "Kia"),
+                TestData.Vehicle(id: "b", make: "Ford"),
+                TestData.Vehicle(id: "c", make: "Kia")),
+            new FakeManifest(TestData.SuvPool));
+
+        Assert.Equal(["Ford", "Kia"], service.Facets().Makes);
     }
 
     [Fact]

@@ -11,7 +11,7 @@ import styles from './VehicleCard.module.css';
 interface VehicleCardProps {
   vehicle: Vehicle;
   now: number;
-  onSelect: (id: string) => void;
+  onSelect: (vehicle: Vehicle) => void;
   isHighBidder?: boolean;
   /** The buyer bought this vehicle via Buy Now — the auction is over. */
   isWon?: boolean;
@@ -45,7 +45,7 @@ export function VehicleCard({
       <div className={styles.body}>
         <header>
           <h3 className={styles.title}>
-            <button type="button" className={styles.titleLink} onClick={() => onSelect(vehicle.id)}>
+            <button type="button" className={styles.titleLink} onClick={() => onSelect(vehicle)}>
               {vehicle.year} {vehicle.make} {vehicle.model}
             </button>
           </h3>

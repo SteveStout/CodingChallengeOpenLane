@@ -2,6 +2,16 @@ using TheBlock.Domain;
 
 namespace TheBlock.Application;
 
+/// <summary>One page of search results plus the total match count.</summary>
+public sealed record SearchResult(int Total, IReadOnlyList<Vehicle> Vehicles);
+
+/// <summary>Distinct dropdown values, one list per filterable field.</summary>
+public sealed record InventoryFacets(
+    IReadOnlyList<string> Makes,
+    IReadOnlyList<string> BodyStyles,
+    IReadOnlyList<string> TitleStatuses,
+    IReadOnlyList<string> Provinces);
+
 /// <summary>
 /// The read-only inventory use case: loads the dataset once, rewrites each
 /// vehicle's images to gallery picks served under <paramref name="imagePathPrefix"/>,
@@ -18,9 +28,37 @@ public sealed class InventoryService(
 
     public IReadOnlyList<Vehicle> GetAll() => _inventory.Value.All;
 
-    /// <summary>Vehicles matching <paramref name="filter"/>, with statuses derived from <paramref name="clock"/>.</summary>
-    public IReadOnlyList<Vehicle> Search(VehicleFilter filter, AuctionClock clock) =>
-        GetAll().Where(vehicle => filter.Matches(vehicle, clock)).ToList();
+    /// <summary>
+    /// Vehicles matching <paramref name="filter"/> (statuses derived from
+    /// <paramref name="clock"/>), ordered by <paramref name="sort"/>, with the
+    /// page capped at <paramref name="limit"/>. Total counts every match.
+    /// </summary>
+    public SearchResult Search(
+        VehicleFilter filter,
+        AuctionClock clock,
+        VehicleSort sort = VehicleSort.EndingSoonest,
+        int limit = int.MaxValue)
+    {
+        var matched = GetAll().Where(vehicle => filter.Matches(vehicle, clock));
+        var ordered = VehicleOrdering.Sort(matched, sort, clock).ToList();
+        return new SearchResult(ordered.Count, ordered.Take(limit).ToList());
+    }
+
+    /// <summary>Distinct values feeding the UI's filter dropdowns, sorted.</summary>
+    public InventoryFacets Facets()
+    {
+        var vehicles = GetAll();
+        return new InventoryFacets(
+            Distinct(vehicles, v => v.Make),
+            Distinct(vehicles, v => v.BodyStyle),
+            Distinct(vehicles, v => v.TitleStatus),
+            Distinct(vehicles, v => v.Province));
+    }
+
+    private static IReadOnlyList<string> Distinct(
+        IReadOnlyList<Vehicle> vehicles,
+        Func<Vehicle, string> field) =>
+        vehicles.Select(field).Distinct().OrderBy(v => v, StringComparer.Ordinal).ToList();
 
     public Vehicle? GetById(string id) =>
         _inventory.Value.ById.TryGetValue(id, out var vehicle) ? vehicle : null;

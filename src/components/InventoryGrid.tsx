@@ -5,7 +5,7 @@ import styles from './InventoryGrid.module.css';
 interface InventoryGridProps {
   vehicles: Vehicle[];
   now: number;
-  onSelect: (id: string) => void;
+  onSelect: (vehicle: Vehicle) => void;
   highBidderIds?: ReadonlySet<string>;
   wonIds?: ReadonlySet<string>;
   onClearFilters?: () => void;

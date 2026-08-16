@@ -6,7 +6,7 @@ import {
   type SortKey,
 } from '../lib/inventory';
 import type { AuctionStatus } from '../lib/auction';
-import { capitalize } from '../lib/format';
+import { capitalize, formatInteger } from '../lib/format';
 import styles from './FilterBar.module.css';
 
 interface FilterBarProps {
@@ -19,7 +19,10 @@ interface FilterBarProps {
   bodyStyles: string[];
   titleStatuses: string[];
   provinces: string[];
-  resultCount: number;
+  /** How many rows the current page shows. */
+  shownCount: number;
+  /** How many vehicles match the filters in total, server-side. */
+  totalCount: number;
 }
 
 const CONDITION_OPTIONS = [
@@ -55,7 +58,8 @@ export function FilterBar({
   bodyStyles,
   titleStatuses,
   provinces,
-  resultCount,
+  shownCount,
+  totalCount,
 }: FilterBarProps) {
   const id = useId();
   const activeCount = countActiveFilters(filters);
@@ -73,7 +77,7 @@ export function FilterBar({
           <input
             type="search"
             className={styles.searchInput}
-            placeholder="Search make, model, or trim…"
+            placeholder="Search make, model, province, title…"
             aria-label="Search vehicles"
             value={filters.query}
             onChange={(e) => onFiltersChange({ query: e.target.value })}
@@ -227,7 +231,9 @@ export function FilterBar({
 
       <div className={styles.footer}>
         <p className={styles.count} role="status">
-          {resultCount} {resultCount === 1 ? 'vehicle' : 'vehicles'}
+          {totalCount > shownCount
+            ? `Showing ${shownCount} of ${formatInteger(totalCount)} vehicles`
+            : `${totalCount} ${totalCount === 1 ? 'vehicle' : 'vehicles'}`}
         </p>
         {activeCount > 0 && (
           <button type="button" className={styles.clear} onClick={onClear}>

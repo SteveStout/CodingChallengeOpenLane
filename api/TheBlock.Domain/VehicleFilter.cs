@@ -8,7 +8,12 @@ namespace TheBlock.Domain;
 /// </summary>
 public sealed record VehicleFilter
 {
-    /// <summary>Free text; every whitespace-separated token must match year, make, model, or trim.</summary>
+    /// <summary>
+    /// Free text; every whitespace-separated token must match somewhere in the
+    /// vehicle's searchable fields — identity (year, make, model, trim) plus
+    /// every field the filters cover (body style, title status, province, and
+    /// the derived auction status: live/upcoming/ended) and the city.
+    /// </summary>
     public string? Query { get; init; }
 
     public string? Make { get; init; }
@@ -22,7 +27,7 @@ public sealed record VehicleFilter
 
     public bool Matches(Vehicle vehicle, AuctionClock clock)
     {
-        if (!MatchesQuery(vehicle))
+        if (!MatchesQuery(vehicle, clock))
         {
             return false;
         }
@@ -57,13 +62,16 @@ public sealed record VehicleFilter
     private static bool MatchesExactly(string? wanted, string actual) =>
         wanted is null || actual.Equals(wanted, StringComparison.OrdinalIgnoreCase);
 
-    private bool MatchesQuery(Vehicle vehicle)
+    private bool MatchesQuery(Vehicle vehicle, AuctionClock clock)
     {
         if (string.IsNullOrWhiteSpace(Query))
         {
             return true;
         }
-        string haystack = $"{vehicle.Year} {vehicle.Make} {vehicle.Model} {vehicle.Trim}"
+        string haystack =
+            ($"{vehicle.Year} {vehicle.Make} {vehicle.Model} {vehicle.Trim} " +
+             $"{vehicle.BodyStyle} {vehicle.TitleStatus} {vehicle.Province} {vehicle.City} " +
+             $"{AuctionSchedule.StatusFor(vehicle.Id, clock)}")
             .ToLowerInvariant();
         return Query
             .ToLowerInvariant()

@@ -44,6 +44,13 @@ function loadStoredBids(): BidMap {
   }
 }
 
+/** A vehicle with the buyer's own bid layered over the server's figures. */
+export function applyBidRecord(vehicle: Vehicle, record: BidRecord | undefined): Vehicle {
+  return record
+    ? { ...vehicle, current_bid: record.amount, bid_count: record.bidCount }
+    : vehicle;
+}
+
 /**
  * The buyer's bids, merged over the base dataset and persisted to
  * localStorage keyed by vehicle id so they survive a refresh.
@@ -60,13 +67,7 @@ export function useBids(baseVehicles: Vehicle[]) {
   }, [bids]);
 
   const vehicles = useMemo(
-    () =>
-      baseVehicles.map((vehicle) => {
-        const record = bids[vehicle.id];
-        return record
-          ? { ...vehicle, current_bid: record.amount, bid_count: record.bidCount }
-          : vehicle;
-      }),
+    () => baseVehicles.map((vehicle) => applyBidRecord(vehicle, bids[vehicle.id])),
     [baseVehicles, bids]
   );
 

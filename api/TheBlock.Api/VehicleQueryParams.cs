@@ -16,6 +16,8 @@ public sealed record VehicleQueryParams(
     [FromQuery(Name = "title_status")] string? TitleStatus,
     string? Province,
     string? Status,
+    string? Sort,
+    int? Limit,
     [FromQuery(Name = "anchor_ms")] long? AnchorMs,
     [FromQuery(Name = "min_condition")] double? MinCondition,
     [FromQuery(Name = "price_min")] double? PriceMin,
@@ -24,9 +26,20 @@ public sealed record VehicleQueryParams(
     /// <summary>A real client's midnight anchor is always within a day or two of now.</summary>
     private const long MaxAnchorDriftMs = 2L * 24 * 60 * 60 * 1000;
 
-    public bool TryBuildFilter(out VehicleFilter filter, out AuctionClock clock, out string? error)
+    /// <summary>The landing page shows the top 100; clients may ask for up to 500.</summary>
+    public const int DefaultLimit = 100;
+    private const int MaxLimit = 500;
+
+    public int EffectiveLimit => Math.Clamp(Limit ?? DefaultLimit, 1, MaxLimit);
+
+    public bool TryBuildFilter(
+        out VehicleFilter filter,
+        out AuctionClock clock,
+        out VehicleSort sort,
+        out string? error)
     {
         filter = new VehicleFilter();
+        sort = VehicleSort.EndingSoonest;
         var utcNow = DateTimeOffset.UtcNow;
 
         // The client sends its own local-midnight anchor so server-side status
@@ -61,6 +74,22 @@ public sealed record VehicleQueryParams(
             error = $"Unknown status '{Status}'. Use live, upcoming, or ended.";
             return false;
         }
+
+        VehicleSort? parsedSort = Sort?.ToLowerInvariant() switch
+        {
+            null or "" or "ending-soonest" => VehicleSort.EndingSoonest,
+            "price-asc" => VehicleSort.PriceAsc,
+            "price-desc" => VehicleSort.PriceDesc,
+            "condition" => VehicleSort.Condition,
+            "most-bids" => VehicleSort.MostBids,
+            _ => null,
+        };
+        if (parsedSort is null)
+        {
+            error = $"Unknown sort '{Sort}'. Use ending-soonest, price-asc, price-desc, condition, or most-bids.";
+            return false;
+        }
+        sort = parsedSort.Value;
 
         filter = new VehicleFilter
         {

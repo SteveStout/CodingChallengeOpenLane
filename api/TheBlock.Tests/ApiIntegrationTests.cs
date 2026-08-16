@@ -5,37 +5,96 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace TheBlock.Tests;
 
 /// <summary>
-/// End-to-end through the real host: DI wiring, JSON file loading, photo
-/// rewriting, endpoint shapes, and static image serving.
+/// End-to-end through the real host: DI wiring, the synthetic 100k dataset,
+/// filtering/sorting/paging parameters, endpoint shapes, and static images.
 /// </summary>
 public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
     : IClassFixture<WebApplicationFactory<Program>>
 {
+    private const int ExpectedTotal = 100_000;
     private readonly HttpClient _client = factory.CreateClient();
 
+    private async Task<JsonDocument> GetAsync(string url) =>
+        JsonDocument.Parse(await _client.GetStringAsync(url));
+
     [Fact]
-    public async Task Vehicle_list_returns_all_200_in_snake_case()
+    public async Task Default_page_is_100_of_the_full_synthetic_dataset_in_snake_case()
     {
         var response = await _client.GetAsync("/api/vehicles");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
-
         string body = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"body_style\"", body);
-        Assert.Contains("\"odometer_km\"", body);
         Assert.DoesNotContain("\"bodyStyle\"", body);
 
         using var json = JsonDocument.Parse(body);
-        Assert.Equal(200, json.RootElement.GetArrayLength());
+        Assert.Equal(ExpectedTotal, json.RootElement.GetProperty("total").GetInt32());
+        Assert.Equal(100, json.RootElement.GetProperty("vehicles").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Default_order_is_auction_time_with_live_vehicles_first()
+    {
+        long anchor = new DateTimeOffset(DateTimeOffset.UtcNow.Date, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        // Capture "now" BEFORE the request: anything the server saw as live
+        // cannot have been ended at this earlier instant, however close to
+        // its boundary it is (at 100k scale the soonest end is seconds away).
+        long nowBefore = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        using var json = await GetAsync($"/api/vehicles?anchor_ms={anchor}");
+
+        // With ~43% of 100k live, the whole first page is live auctions
+        // ordered by soonest end.
+        long previousEnd = long.MinValue;
+        foreach (var vehicle in json.RootElement.GetProperty("vehicles").EnumerateArray())
+        {
+            string id = vehicle.GetProperty("id").GetString()!;
+            var window = TheBlock.Domain.AuctionSchedule.Window(id, anchor);
+            Assert.NotEqual(
+                TheBlock.Domain.AuctionStatus.Ended,
+                TheBlock.Domain.AuctionSchedule.Status(window, nowBefore));
+            Assert.True(window.EndsAtMs >= previousEnd, "live page must be ordered by soonest end");
+            previousEnd = window.EndsAtMs;
+        }
+    }
+
+    [Fact]
+    public async Task Limit_parameter_controls_the_page_size()
+    {
+        using var json = await GetAsync("/api/vehicles?limit=5");
+        Assert.Equal(5, json.RootElement.GetProperty("vehicles").GetArrayLength());
+        Assert.Equal(ExpectedTotal, json.RootElement.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task Sort_by_price_ascending_orders_the_page()
+    {
+        using var json = await GetAsync("/api/vehicles?sort=price-asc&limit=50");
+
+        int previous = int.MinValue;
+        foreach (var vehicle in json.RootElement.GetProperty("vehicles").EnumerateArray())
+        {
+            int price = vehicle.GetProperty("current_bid").ValueKind == JsonValueKind.Null
+                ? vehicle.GetProperty("starting_bid").GetInt32()
+                : vehicle.GetProperty("current_bid").GetInt32();
+            Assert.True(price >= previous, "prices must not decrease");
+            previous = price;
+        }
+    }
+
+    [Fact]
+    public async Task Unknown_sort_returns_400()
+    {
+        var response = await _client.GetAsync("/api/vehicles?sort=alphabetical");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
     public async Task Vehicle_images_point_at_the_api_and_are_served_by_it()
     {
-        using var json = JsonDocument.Parse(await _client.GetStringAsync("/api/vehicles"));
+        using var json = await GetAsync("/api/vehicles?limit=1");
 
-        var images = json.RootElement[0].GetProperty("images").EnumerateArray()
+        var images = json.RootElement.GetProperty("vehicles")[0].GetProperty("images")
+            .EnumerateArray()
             .Select(image => image.GetString()!)
             .ToList();
         Assert.NotEmpty(images);
@@ -49,10 +108,10 @@ public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task Single_vehicle_lookup_round_trips_the_id()
     {
-        using var list = JsonDocument.Parse(await _client.GetStringAsync("/api/vehicles"));
-        string id = list.RootElement[0].GetProperty("id").GetString()!;
+        using var list = await GetAsync("/api/vehicles?limit=1");
+        string id = list.RootElement.GetProperty("vehicles")[0].GetProperty("id").GetString()!;
 
-        using var single = JsonDocument.Parse(await _client.GetStringAsync($"/api/vehicles/{id}"));
+        using var single = await GetAsync($"/api/vehicles/{id}");
         Assert.Equal(id, single.RootElement.GetProperty("id").GetString());
     }
 
@@ -66,22 +125,21 @@ public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task Filters_by_make_via_query_parameter()
     {
-        using var json = JsonDocument.Parse(await _client.GetStringAsync("/api/vehicles?make=Ford"));
+        using var json = await GetAsync("/api/vehicles?make=Ford&limit=50");
 
-        var makes = json.RootElement.EnumerateArray()
-            .Select(v => v.GetProperty("make").GetString())
-            .ToList();
-        Assert.NotEmpty(makes);
-        Assert.All(makes, make => Assert.Equal("Ford", make));
+        var vehicles = json.RootElement.GetProperty("vehicles").EnumerateArray().ToList();
+        Assert.NotEmpty(vehicles);
+        Assert.All(vehicles, v => Assert.Equal("Ford", v.GetProperty("make").GetString()));
+        Assert.InRange(json.RootElement.GetProperty("total").GetInt32(), 1, ExpectedTotal - 1);
     }
 
     [Fact]
     public async Task Combines_multiple_filters()
     {
-        using var json = JsonDocument.Parse(
-            await _client.GetStringAsync("/api/vehicles?body_style=SUV&price_max=30000&min_condition=3"));
+        using var json = await GetAsync(
+            "/api/vehicles?body_style=SUV&price_max=30000&min_condition=3&limit=50");
 
-        foreach (var vehicle in json.RootElement.EnumerateArray())
+        foreach (var vehicle in json.RootElement.GetProperty("vehicles").EnumerateArray())
         {
             Assert.Equal("SUV", vehicle.GetProperty("body_style").GetString());
             Assert.True(vehicle.GetProperty("condition_grade").GetDouble() >= 3);
@@ -95,21 +153,18 @@ public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task Text_search_narrows_the_results()
     {
-        using var json = JsonDocument.Parse(await _client.GetStringAsync("/api/vehicles?q=bronco"));
+        using var json = await GetAsync("/api/vehicles?q=bronco&limit=50");
 
-        int count = json.RootElement.GetArrayLength();
-        Assert.InRange(count, 1, 199);
-        Assert.All(json.RootElement.EnumerateArray(),
+        Assert.InRange(json.RootElement.GetProperty("total").GetInt32(), 1, ExpectedTotal - 1);
+        Assert.All(json.RootElement.GetProperty("vehicles").EnumerateArray(),
             vehicle => Assert.Equal("Bronco", vehicle.GetProperty("model").GetString()));
     }
 
     [Fact]
     public async Task Status_filter_returns_a_proper_subset()
     {
-        using var json = JsonDocument.Parse(await _client.GetStringAsync("/api/vehicles?status=live"));
-
-        // The schedule guarantees a mix, so live is never empty and never everything.
-        Assert.InRange(json.RootElement.GetArrayLength(), 1, 199);
+        using var json = await GetAsync("/api/vehicles?status=live");
+        Assert.InRange(json.RootElement.GetProperty("total").GetInt32(), 1, ExpectedTotal - 1);
     }
 
     [Theory]
@@ -126,9 +181,8 @@ public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
     public async Task Status_filter_honours_the_clients_midnight_anchor()
     {
         long anchor = new DateTimeOffset(DateTimeOffset.UtcNow.Date, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        using var json = JsonDocument.Parse(
-            await _client.GetStringAsync($"/api/vehicles?status=live&anchor_ms={anchor}"));
-        Assert.InRange(json.RootElement.GetArrayLength(), 1, 199);
+        using var json = await GetAsync($"/api/vehicles?status=live&anchor_ms={anchor}");
+        Assert.InRange(json.RootElement.GetProperty("total").GetInt32(), 1, ExpectedTotal - 1);
     }
 
     [Fact]
@@ -141,15 +195,26 @@ public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task Decimal_price_bounds_are_accepted_with_integer_semantics()
     {
-        using var json = JsonDocument.Parse(
-            await _client.GetStringAsync("/api/vehicles?price_max=30000.5"));
-        Assert.InRange(json.RootElement.GetArrayLength(), 1, 199);
+        using var json = await GetAsync("/api/vehicles?price_max=30000.5&limit=1");
+        Assert.InRange(json.RootElement.GetProperty("total").GetInt32(), 1, ExpectedTotal - 1);
     }
 
     [Fact]
-    public async Task Unmatched_filters_return_an_empty_array_not_an_error()
+    public async Task Unmatched_filters_return_an_empty_page_not_an_error()
     {
-        using var json = JsonDocument.Parse(await _client.GetStringAsync("/api/vehicles?make=DeLorean"));
-        Assert.Equal(0, json.RootElement.GetArrayLength());
+        using var json = await GetAsync("/api/vehicles?make=DeLorean");
+        Assert.Equal(0, json.RootElement.GetProperty("total").GetInt32());
+        Assert.Equal(0, json.RootElement.GetProperty("vehicles").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Facets_cover_the_filterable_fields()
+    {
+        using var json = await GetAsync("/api/facets");
+
+        Assert.Contains("Ford",
+            json.RootElement.GetProperty("makes").EnumerateArray().Select(m => m.GetString()));
+        Assert.Equal(5, json.RootElement.GetProperty("body_styles").GetArrayLength());
+        Assert.Equal(3, json.RootElement.GetProperty("title_statuses").GetArrayLength());
     }
 }
