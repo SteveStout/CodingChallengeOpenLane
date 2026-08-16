@@ -43,6 +43,12 @@ test('the About menu shows the README in-app and links the résumé PDF', async 
 
   const resume = await page.request.get('/api/docs/resume');
   expect(resume.headers()['content-type']).toContain('application/pdf');
+
+  await page.getByRole('button', { name: 'About' }).click();
+  await expect(page.getByRole('menuitem', { name: 'GitHub repository' })).toHaveAttribute(
+    'href',
+    'https://github.com/SteveStout/CodingChallengeOpenLane'
+  );
 });
 
 test('a transient API failure shows the stale banner and Retry recovers', async ({ page }) => {

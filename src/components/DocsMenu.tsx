@@ -2,9 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 import { marked } from 'marked';
 import styles from './DocsMenu.module.css';
 
+function ExternalIcon() {
+  return (
+    <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+      <path
+        d="M4.5 1.5h6v6M10.5 1.5 5 7M8 10.5H1.5V4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /**
  * The header's About dropdown: view the project README in-app (markdown,
- * served by the API) or open the author's résumé PDF in a new tab.
+ * served by the API), open the author's résumé PDF, or visit the repository.
  */
 export function DocsMenu() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -74,16 +89,18 @@ export function DocsMenu() {
             onClick={() => setMenuOpen(false)}
           >
             Steven's résumé (PDF)
-            <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-              <path
-                d="M4.5 1.5h6v6M10.5 1.5 5 7M8 10.5H1.5V4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <ExternalIcon />
+          </a>
+          <a
+            className={styles.item}
+            role="menuitem"
+            href="https://github.com/SteveStout/CodingChallengeOpenLane"
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            GitHub repository
+            <ExternalIcon />
           </a>
         </div>
       )}
