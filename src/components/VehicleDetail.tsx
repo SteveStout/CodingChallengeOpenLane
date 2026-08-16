@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Vehicle } from '../lib/types';
 import { auctionTiming, reserveState, type BidOutcome } from '../lib/auction';
-import { formatOdometer } from '../lib/format';
+import { capitalize, formatOdometer } from '../lib/format';
 import { AuctionCountdown } from './AuctionCountdown';
 import { BidPanel } from './BidPanel';
 import { ConditionBadge } from './ConditionBadge';
@@ -19,8 +19,6 @@ interface VehicleDetailProps {
   onPlaceBid: (amount: number) => BidOutcome;
   onBuyNow: () => BidOutcome;
 }
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function VehicleDetail({
   vehicle,

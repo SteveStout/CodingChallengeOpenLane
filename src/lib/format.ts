@@ -29,6 +29,11 @@ export function formatOdometer(km: number): string {
   return `${integerFormat.format(km)} km`;
 }
 
+/** "sedan" → "Sedan"; leaves already-capitalized values (CVT, 4WD) alone. */
+export function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 const dateTimeFormat = new Intl.DateTimeFormat(LOCALE, {
   month: 'short',
   day: 'numeric',

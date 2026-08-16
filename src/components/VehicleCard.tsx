@@ -1,6 +1,6 @@
 import type { Vehicle } from '../lib/types';
 import { auctionTiming, currentPrice, reserveState } from '../lib/auction';
-import { formatCurrency, formatOdometer } from '../lib/format';
+import { capitalize, formatCurrency, formatOdometer } from '../lib/format';
 import { AuctionCountdown } from './AuctionCountdown';
 import { ConditionBadge } from './ConditionBadge';
 import { ReserveBadge } from './ReserveBadge';
@@ -50,7 +50,7 @@ export function VehicleCard({
             </button>
           </h3>
           <p className={styles.subtitle}>
-            {vehicle.trim} · {vehicle.body_style}
+            {vehicle.trim} · {capitalize(vehicle.body_style)}
           </p>
         </header>
 

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "dotnet run --project api/TheBlock.Api",
+    "test:api": "dotnet test api",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",

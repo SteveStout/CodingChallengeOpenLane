@@ -6,6 +6,7 @@ import {
   type SortKey,
 } from '../lib/inventory';
 import type { AuctionStatus } from '../lib/auction';
+import { capitalize } from '../lib/format';
 import styles from './FilterBar.module.css';
 
 interface FilterBarProps {
@@ -37,12 +38,10 @@ const STATUS_OPTIONS: Array<{ value: AuctionStatus | ''; label: string }> = [
   { value: 'ended', label: 'Ended' },
 ];
 
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** Parses a number input's value: empty or invalid → null (no bound). */
+/** Parses a price input: empty or invalid → null; whole dollars only (the API binds int). */
 function parseBound(value: string): number | null {
   if (value.trim() === '') return null;
-  const n = Number(value);
+  const n = Math.floor(Number(value));
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 

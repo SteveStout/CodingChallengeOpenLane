@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { auctionTiming } from './auction';
-import {
-  distinctValues,
-  EMPTY_FILTERS,
-  filterVehicles,
-  matchesQuery,
-  sortVehicles,
-} from './inventory';
+import { countActiveFilters, distinctValues, EMPTY_FILTERS, sortVehicles } from './inventory';
 import type { Vehicle } from './types';
 
 const NOW = new Date('2026-08-15T12:00:00').getTime();
@@ -45,45 +39,6 @@ const base: Vehicle = {
 
 const v = (overrides: Partial<Vehicle>): Vehicle => ({ ...base, ...overrides });
 
-describe('matchesQuery', () => {
-  it('matches tokens across make, model, and trim, case-insensitively', () => {
-    expect(matchesQuery(base, 'ford bro')).toBe(true);
-    expect(matchesQuery(base, 'big bend')).toBe(true);
-    expect(matchesQuery(base, 'honda')).toBe(false);
-  });
-
-  it('matches the year and ignores extra whitespace', () => {
-    expect(matchesQuery(base, '  2023   bronco ')).toBe(true);
-  });
-});
-
-describe('filterVehicles', () => {
-  const vehicles = [
-    v({ id: 'cheap', current_bid: 4000, condition_grade: 2.1, province: 'Quebec' }),
-    v({ id: 'mid', current_bid: 15000, condition_grade: 3.5 }),
-    v({ id: 'unbid', current_bid: null, bid_count: 0, starting_bid: 30000, condition_grade: 4.4 }),
-  ];
-
-  it('applies price bounds to the competing price (bid, or opening ask when unbid)', () => {
-    const ids = filterVehicles(vehicles, { ...EMPTY_FILTERS, priceMin: 10000, priceMax: 20000 }, NOW).map(
-      (x) => x.id
-    );
-    expect(ids).toEqual(['mid']);
-    const highIds = filterVehicles(vehicles, { ...EMPTY_FILTERS, priceMin: 25000 }, NOW).map((x) => x.id);
-    expect(highIds).toEqual(['unbid']);
-  });
-
-  it('applies the minimum condition grade', () => {
-    const ids = filterVehicles(vehicles, { ...EMPTY_FILTERS, minCondition: 3 }, NOW).map((x) => x.id);
-    expect(ids).toEqual(['mid', 'unbid']);
-  });
-
-  it('filters by province', () => {
-    const ids = filterVehicles(vehicles, { ...EMPTY_FILTERS, province: 'Quebec' }, NOW).map((x) => x.id);
-    expect(ids).toEqual(['cheap']);
-  });
-});
-
 describe('sortVehicles', () => {
   it('sorts by price both ways using the competing price', () => {
     const vehicles = [v({ id: 'b', current_bid: 20000 }), v({ id: 'a', current_bid: null, starting_bid: 5000 })];
@@ -118,5 +73,14 @@ describe('distinctValues', () => {
   it('returns sorted unique values for dropdowns', () => {
     const vehicles = [v({ make: 'Toyota' }), v({ make: 'BMW' }), v({ make: 'Toyota' })];
     expect(distinctValues(vehicles, 'make')).toEqual(['BMW', 'Toyota']);
+  });
+});
+
+describe('countActiveFilters', () => {
+  it('counts populated filters, treating the price pair as one', () => {
+    expect(countActiveFilters(EMPTY_FILTERS)).toBe(0);
+    expect(
+      countActiveFilters({ ...EMPTY_FILTERS, make: 'Ford', priceMin: 1000, priceMax: 2000 })
+    ).toBe(2);
   });
 });

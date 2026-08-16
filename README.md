@@ -1,19 +1,29 @@
 # The Block — Buyer Prototype
 
 The buyer side of a used-vehicle auction platform, built for the OPENLANE coding challenge:
-browse 200 listings, inspect a vehicle in detail, and place bids. Frontend-only prototype.
-The original challenge brief is preserved in git history.
+browse 200 listings, inspect a vehicle in detail, and place bids. React frontend backed by
+a small read-only .NET API. The original challenge brief is preserved in git history.
 
 ## How to Run
 
-Requires Node 20+ (built on Node 24).
+Requires Node 20+ (built on Node 24) and the .NET 10 SDK.
 
 ```
 npm install
-npm run dev
+npm run api        # terminal 1 — .NET API on http://localhost:5210
+npm run dev        # terminal 2 — Vite dev server
 ```
 
-Open http://localhost:5173. Other scripts:
+Open http://localhost:5173. The dev server proxies `/api` to the .NET API, which serves
+the inventory JSON and the vehicle photos (`/api/images/...`). All filtering is
+server-side via LINQ over GET parameters — e.g.
+`GET /api/vehicles?make=Ford&body_style=SUV&status=live&price_max=30000&q=bronco`
+(`q`, `make`, `body_style`, `title_status`, `province`, `status`, `min_condition`,
+`price_min`, `price_max`; unknown `status` values return 400). `GET /api/vehicles/{id}`
+fetches one vehicle. If the API isn't running, the app shows a clear error state with a
+retry.
+
+Other scripts:
 
 ```
 npm test           # unit tests (Vitest)
@@ -21,10 +31,7 @@ npm run build      # typecheck + production bundle to dist/
 npm run preview    # serve the production build
 ```
 
-The dataset ships in the repo (`data/vehicles.json`) and is bundled at build time — no
-backend needed. Vehicle photos are vendored in `public/vehicles/` (network only improves
-the Poppins font, which falls back to system fonts offline). To refresh the photo set
-from Wikimedia Commons, run `node scripts/fetch_photos.mjs`.
+To refresh the photo set from Wikimedia Commons, run `node scripts/fetch_photos.mjs`.
 
 ## Time Spent
 
@@ -52,7 +59,12 @@ screenshots at desktop/tablet/mobile widths.
 - **Photos are representative, not the actual lot.** 50 free-license photos (10 per body
   style, modern generations) are fetched from Wikimedia Commons and mapped
   deterministically per vehicle id, preferring photos of the vehicle's own make. Real
-  listings would use real lot photography; credits in `public/vehicles/CREDITS.md`.
+  listings would use real lot photography; credits in `api/wwwroot/images/CREDITS.md`.
+- **The API is read-only.** It owns the dataset and photo mapping; bidding state stays
+  client-side in localStorage. Server-side bidding endpoints are the natural next step.
+  One consequence: price filters evaluate the *server's* bid figures, so a bid you just
+  placed locally isn't reflected in price-range filtering until bidding moves
+  server-side.
 - Out of scope per the brief: auth, accounts, seller tooling, checkout, payments, backend,
   real-time multi-user bidding.
 
@@ -64,16 +76,22 @@ screenshots at desktop/tablet/mobile widths.
   openlane.com: Onward navy `#0A1B5F`, OPENLANE blue `#0061FF`, silver neutrals, pill
   buttons, and Poppins (a Google Fonts stylesheet link — the one external asset — with a
   system-font fallback).
-- **Backend:** none. `src/lib/data.ts` is the single seam that imports the JSON and
-  returns typed `Vehicle[]` — a real API would plug in there.
-- **Database:** none (localStorage for the buyer's bids).
+- **Backend:** .NET 10 minimal API in onion architecture (`api/`): `TheBlock.Domain`
+  (entities, photo selection, auction schedule, filter rules — no dependencies),
+  `TheBlock.Application` (the `InventoryService` use case behind source ports),
+  `TheBlock.Infrastructure` (JSON file adapters), `TheBlock.Api` (host, endpoints,
+  static images). Filtering is LINQ over GET parameters, including auction status —
+  the window derivation is ported to C# with identical math so server filtering agrees
+  with client rendering. `src/lib/data.ts` remains the frontend's single data seam.
+- **Database:** none (the API reads the JSON file; localStorage holds the buyer's bids).
 
 ## What I Built
 
 - **Inventory** — responsive card grid (3/2/1 across), token search over year, make,
   model, and trim, filters for make, body style, title status, province, auction status,
-  minimum condition, and price range, five sorts (ending soonest with live first, price
-  both ways, condition, most bids), and a clear empty state.
+  minimum condition, and price range — all applied server-side (debounced GET requests),
+  five client-side sorts (ending soonest with live first, price both ways, condition,
+  most bids), and a clear empty state.
 - **Detail view** — image gallery with thumbnails and graceful fallback art, full specs,
   condition grade with report and damage notes, a warning banner for salvage or rebuilt
   titles, seller and location, and the auction panel.
@@ -94,22 +112,33 @@ screenshots at desktop/tablet/mobile widths.
   presents as "Sold" with a purchase price everywhere.
 - **One clock at the app root** (`useNow`) drives every countdown and status, so a card
   and its detail view can never disagree about liveness.
-- **Photo mapping lives behind the data seam**: `src/lib/data.ts` swaps the dataset's
-  placeholder URLs for vendored stock photos via `src/lib/images.ts`, which prefers
-  same-make photos from the body-style pool. The JSON itself stays untouched, and a real
-  API's photo URLs would drop in at the same seam.
+- **Photo mapping lives behind the API**: `api/Program.cs` swaps the dataset's
+  placeholder URLs for vendored stock photos, preferring same-make photos from the
+  body-style pool. `data/vehicles.json` itself stays untouched, and the frontend simply
+  renders whatever image URLs the API returns — as it would in production.
 
 ## Testing
 
-43 Vitest unit tests across the domain layer: reserve states including the null-reserve
-and no-bids cases, window stability/spread/status boundaries plus a guaranteed
-ended/live/upcoming mix, all three increment tiers, bid validation (below minimum, ended,
-upcoming, non-numeric), Buy Now precedence — including a test proven necessary by
-mutation (reordering the buy-now check silently passed the old suite) and a guard against
-`Infinity` instantly winning — plus search, filter, sort, and countdown formatting.
+**Frontend (42 Vitest tests):** reserve states including the null-reserve and no-bids
+cases, window stability/spread/status boundaries plus a guaranteed ended/live/upcoming
+mix, all three increment tiers, bid validation (below minimum, ended, upcoming,
+non-numeric), Buy Now precedence — including a test proven necessary by mutation
+(reordering the buy-now check silently passed the old suite) and a guard against
+`Infinity` instantly winning — plus sorting, facets, query-parameter mapping, and
+countdown formatting. Run with `npm test`.
+
+**API (36 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
+domain (photo gallery determinism and make preference, FNV-1a known vectors, auction
+schedule bounds and boundaries, every filter rule), application (`InventoryService` with
+in-memory fakes standing in for the file adapters), infrastructure (snake_case
+deserialization plus the real dataset and manifest), and integration tests that boot the
+real host in-memory (`WebApplicationFactory`) to verify endpoints, filtering parameters,
+the 400 path, and static image serving. Run with `npm run test:api`.
 
 ## What I'd Do With More Time
 
+- Move bidding server-side (`POST /api/vehicles/{id}/bids`) so validation and state live
+  in one place instead of duplicated client-side
 - Simulated competing bidders so the high-bidder state can be lost, with outbid alerts
 - URL-driven state (real router) for shareable filtered views and vehicle links
 - Watchlist and recently-viewed, persisted alongside bids
