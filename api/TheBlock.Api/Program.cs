@@ -18,6 +18,7 @@ string contentRoot = builder.Environment.ContentRootPath;
 // `dotnet run`, tests, and published output all working from one line.
 string dataPath = FindUpward(contentRoot, Path.Combine("data", "vehicles.json"));
 string readmePath = FindUpward(contentRoot, "README.md");
+string dataflowPath = FindUpward(contentRoot, Path.Combine("docs", "DATAFLOW.md"));
 string resumePath = Path.Combine(contentRoot, "wwwroot", "docs", "resume.pdf");
 string manifestPath = Path.Combine(contentRoot, "photo-manifest.json");
 string imagesRoot = Path.Combine(contentRoot, "wwwroot", "images");
@@ -117,6 +118,9 @@ app.MapDelete("/api/bids", (BidService bids) =>
 
 app.MapGet("/api/docs/readme", () =>
     Results.Text(File.ReadAllText(readmePath), "text/markdown"));
+
+app.MapGet("/api/docs/dataflow", () =>
+    Results.Text(File.ReadAllText(dataflowPath), "text/markdown"));
 
 app.MapGet("/api/docs/resume", () =>
     Results.File(resumePath, "application/pdf"));
