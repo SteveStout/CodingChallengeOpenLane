@@ -7,7 +7,9 @@ challenge brief is preserved in git history.
 
 ## How to Run
 
-Requires Node 20+ (built on Node 24) and the .NET 10 SDK.
+Requires [Node 20+](https://nodejs.org) (built on Node 24) and the
+[.NET 10 SDK](https://dotnet.microsoft.com/download) — on Windows:
+`winget install OpenJS.NodeJS.LTS Microsoft.DotNet.SDK.10`.
 
 ```
 npm install
@@ -59,9 +61,17 @@ To refresh the photo set from Wikimedia Commons, run `node scripts/fetch_photos.
 
 ## Time Spent
 
-About 4 hours, built domain-first: types, auction rules, and tests before any UI, then the
-inventory grid, filters, detail view, bid flow, and a final polish pass against real
-screenshots at desktop/tablet/mobile widths.
+Around 6–8 hours total. The core challenge — domain rules, inventory browsing, filters,
+the detail view, the bid flow, and responsive polish — landed within the suggested 3–4
+hour timebox, built domain-first with tests before any UI. I then deliberately spent the
+rest going past the budget, because the project became a vehicle for demonstrating how I
+build production systems: the .NET API in onion architecture, server-side
+filtering/sorting/paging over a 100,000-record synthetic dataset, server-owned bidding
+rules, three test suites, and CI.
+
+The work was pair-built with Claude Code throughout — I directed the scope, the
+architecture, and every product decision, and I'm happy to walk through the reasoning
+behind any line of it.
 
 ## Assumptions and Scope
 
@@ -206,10 +216,12 @@ status recomputation from server windows, reserve states, formatting and countdo
 URL/filter round-tripping, query-parameter mapping, and the request cache (TTL, per-key,
 forced bypass, no caching of failures). Run with `npm test`.
 
-**End-to-end (4 Playwright smokes):** the real stack — landing page shows 100 of
-100,000, filtering syncs the URL both directions, Load More appends a page, and a bid
-round-trips through the API, survives a reload, and resets. Run with `npm run test:e2e`.
-All three suites run in CI on every push.
+**End-to-end (7 Playwright smokes):** the real stack — landing page shows 100 of
+100,000, filtering and tile navigation sync the URL both directions (including browser
+Back and deep links), Load More appends a page, the About menu serves the docs, a
+transient API failure recovers via the retry banner, and a bid round-trips through the
+API, survives a reload, and resets. Run with `npm run test:e2e` (launches both servers
+itself; uses your installed Chrome). All three suites run in CI on every push.
 
 ## What I'd Do With More Time
 
