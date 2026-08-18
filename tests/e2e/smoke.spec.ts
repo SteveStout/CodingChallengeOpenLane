@@ -33,6 +33,32 @@ test('load more appends the next page', async ({ page }) => {
   await expect(page.locator('article')).toHaveCount(200);
 });
 
+test('tile clicks are GET navigation: URL updates, Back works, deep links restore', async ({ page }) => {
+  await page.goto('/?status=live&sort=most-bids');
+  await page.waitForSelector('article');
+
+  // Opening a tile pushes a history entry with ?vehicle={id}.
+  await page.locator('article h3 button').first().click();
+  await expect(page).toHaveURL(/vehicle=/);
+  await expect(page.getByText('Specifications')).toBeVisible();
+  const detailUrl = page.url();
+
+  // The browser's Back button returns to the filtered list.
+  await page.goBack();
+  await expect(page).not.toHaveURL(/vehicle=/);
+  await expect(page).toHaveURL(/status=live/);
+  await expect(page.locator('article').first()).toBeVisible();
+
+  // A cold load of the detail URL deep-links straight into the detail view.
+  await page.goto(detailUrl);
+  await expect(page.getByText('Specifications')).toBeVisible();
+
+  // The in-app back control from a deep link swaps to the list without exiting.
+  await page.getByRole('button', { name: 'Back to inventory' }).click();
+  await expect(page).not.toHaveURL(/vehicle=/);
+  await expect(page.locator('article').first()).toBeVisible();
+});
+
 test('the About menu shows the README in-app and links the résumé PDF', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'About' }).click();

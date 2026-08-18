@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchFacets,
+  fetchVehicleById,
   fetchVehicles,
   peekVehicles,
   type InventoryFacets,
@@ -39,7 +40,10 @@ const EMPTY_FACETS: InventoryFacets = { makes: [], body_styles: [], title_status
 const EMPTY_PAGE: VehiclePage = { total: 0, vehicles: [] };
 
 /** Filters arrive in the URL (?make=Ford&status=live) so views are shareable. */
-const INITIAL_URL_STATE = filtersFromSearchParams(new URLSearchParams(window.location.search));
+const INITIAL_PARAMS = new URLSearchParams(window.location.search);
+const INITIAL_URL_STATE = filtersFromSearchParams(INITIAL_PARAMS);
+/** A tile click is GET navigation: ?vehicle={id} deep-links the detail view. */
+const INITIAL_VEHICLE_ID = INITIAL_PARAMS.get('vehicle');
 
 export default function App() {
   /** The server-filtered, server-sorted page currently on display. */
@@ -137,13 +141,73 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, sort, reloadNonce]);
 
-  // Mirror the active filters into the address bar (the same GET parameters
-  // the API receives) so any filtered view is shareable and bookmarkable.
-  // replaceState, not pushState — typing shouldn't pile up history entries.
+  // Mirror the current view into the address bar: the filter GET parameters
+  // plus ?vehicle={id} when a detail page is open. replaceState here —
+  // typing shouldn't pile up history entries; opening a tile pushes its own
+  // entry (below) so the browser's Back button closes the detail view.
+  const deepLinkPending = useRef(INITIAL_VEHICLE_ID !== null);
   useEffect(() => {
-    const query = filtersToSearchParams(filters, sort).toString();
-    window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
-  }, [filters, sort]);
+    if (deepLinkPending.current) return;
+    const params = filtersToSearchParams(filters, sort);
+    if (selectedVehicle) params.set('vehicle', selectedVehicle.id);
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      query ? `?${query}` : window.location.pathname
+    );
+  }, [filters, sort, selectedVehicle]);
+
+  // Restore a deep-linked detail view on first load (?vehicle={id}).
+  useEffect(() => {
+    if (!INITIAL_VEHICLE_ID) return;
+    let live = true;
+    fetchVehicleById(INITIAL_VEHICLE_ID)
+      .then((vehicle) => {
+        if (!live) return;
+        deepLinkPending.current = false;
+        if (vehicle) {
+          setSelectedVehicle(vehicle);
+        } else {
+          // Unknown id: drop the dead parameter and stay on the list.
+          const params = new URLSearchParams(window.location.search);
+          params.delete('vehicle');
+          const query = params.toString();
+          window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
+        }
+      })
+      .catch(() => {
+        deepLinkPending.current = false;
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Browser Back/Forward: re-read the whole view from the URL.
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedVehicle?.id ?? null;
+  }, [selectedVehicle]);
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const restored = filtersFromSearchParams(params);
+      setFilters(restored.filters);
+      setSort(restored.sort);
+      const vehicleId = params.get('vehicle');
+      if (!vehicleId) {
+        setSelectedVehicle(null);
+        return;
+      }
+      if (vehicleId === selectedIdRef.current) return;
+      fetchVehicleById(vehicleId)
+        .then((vehicle) => setSelectedVehicle(vehicle))
+        .catch(() => setSelectedVehicle(null));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // While a status filter is active, membership drifts as auctions open and
   // close — re-ask the server periodically so the list stays honest.
@@ -189,9 +253,23 @@ export default function App() {
   const listScrollY = useRef(0);
   const openVehicle = (vehicle: Vehicle) => {
     listScrollY.current = window.scrollY;
+    // Real GET navigation: push a history entry so the browser's Back works.
+    const params = filtersToSearchParams(filters, sort);
+    params.set('vehicle', vehicle.id);
+    window.history.pushState({ viaTile: true }, '', `?${params}`);
     setSelectedVehicle(vehicle);
   };
-  const backToInventory = () => setSelectedVehicle(null);
+  const backToInventory = () => {
+    // If we pushed this entry, going back keeps history clean; a deep-linked
+    // visit has no list entry behind it, so just swap the URL in place.
+    if ((window.history.state as { viaTile?: boolean } | null)?.viaTile) {
+      window.history.back();
+      return;
+    }
+    setSelectedVehicle(null);
+    const query = filtersToSearchParams(filters, sort).toString();
+    window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
+  };
 
   useEffect(() => {
     window.scrollTo(0, selectedVehicle ? 0 : listScrollY.current);

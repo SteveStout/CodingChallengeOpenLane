@@ -124,17 +124,27 @@ screenshots at desktop/tablet/mobile widths.
 
 ## Strengths
 
-- **GET-parameter-driven filtering.** Every filter, the text search, sorting, and paging
-  are query parameters on `GET /api/vehicles`, applied server-side with LINQ — and the
-  browser's address bar mirrors the same parameters, so any filtered view is shareable
-  and bookmarkable.
+- **GET-parameter-driven filtering and navigation.** Every filter, the text search,
+  sorting, and paging are query parameters on `GET /api/vehicles`, applied server-side
+  with LINQ — and the browser's address bar mirrors the same parameters, so any filtered
+  view is shareable and bookmarkable. Opening a vehicle is GET navigation too
+  (`?vehicle={id}` pushes a history entry): the browser's Back button closes the detail,
+  Forward reopens it, and a cold load of a vehicle URL deep-links straight to it.
+  *Where:* `src/lib/inventory.ts` (URL ↔ filter serialization), `src/App.tsx`
+  (pushState/popstate), `api/TheBlock.Api/VehicleQueryParams.cs` (binding),
+  `api/TheBlock.Domain/VehicleFilter.cs` (the LINQ predicate).
 - **Debounced, cached requests.** Filter changes debounce 500 ms so typing doesn't
   hammer the API, and responses are cached per query string (5-minute TTL, bounded).
   Cache hits skip the debounce entirely — the delay only exists to protect the server,
   and a hit never touches it.
+  *Where:* `src/lib/data.ts` (cache, `peekVehicles`), `src/App.tsx` (the debounced
+  fetch effect), `api/TheBlock.Api/Program.cs` (`Cache-Control` on photos).
 - **Server-side pagination at scale.** 100,000 records, but the wire only ever carries a
   page: an envelope of `{ total, vehicles }` with `limit`/`offset`, a landing page of
   the top 100 by auction time, and Load More to walk deeper.
+  *Where:* `api/TheBlock.Application/InventoryService.cs` (`Search`),
+  `api/TheBlock.Infrastructure/SyntheticVehicleSource.cs` (the 100k expansion),
+  `src/App.tsx` (`loadMore`).
 - **One authoritative home for every business rule.** Auction windows, status, minimum
   increments, bid validation, buy-now precedence — all live in `TheBlock.Domain` and
   nowhere else. The wire carries the derived facts (`auction_ends_at`, `min_next_bid`,
@@ -142,17 +152,25 @@ screenshots at desktop/tablet/mobile widths.
   mirrored the math in TypeScript, and cross-language drift bit twice (a timezone
   anchor, then DST) before the consolidation — the architecture exists because the bug
   class it eliminates actually happened.
+  *Where:* `api/TheBlock.Domain/AuctionSchedule.cs`, `BidRules.cs`, and
+  `AuctionClock.cs`; `api/TheBlock.Api/VehicleWire.cs` (derived facts onto the wire);
+  `src/lib/auction.ts` (all that remains client-side).
 - **Onion architecture that earns its layers.** Domain has zero dependencies;
   Application talks through ports (`IVehicleSource`, `IPhotoManifestSource`);
   Infrastructure adapts files; the host only binds and serializes. The proof it's not
   ceremony: the 100k scale-up is a decorator on a port (`SyntheticVehicleSource`) —
   nothing above it changed — and the test suite swaps in-memory fakes at the same seams.
+  *Where:* `api/TheBlock.Domain/` → `api/TheBlock.Application/` (`Ports.cs`,
+  `InventoryService.cs`, `BidService.cs`) → `api/TheBlock.Infrastructure/` →
+  `api/TheBlock.Api/Program.cs` (composition root); fakes in
+  `api/TheBlock.Tests/InventoryServiceTests.cs`.
 
 ## Notable Decisions
 
-- **Domain rules live in pure functions** (`src/lib/auction.ts`), fully separate from
-  React — reserve state, window derivation, increments, validation, and bid resolution
-  are all unit-tested without rendering anything. Components stay thin.
+- **Domain rules live in pure functions**, fully separate from any framework — window
+  derivation, increments, validation, and bid resolution in `api/TheBlock.Domain`
+  (unit-tested without hosting anything), reserve display and status recomputation in
+  `src/lib/auction.ts` (unit-tested without rendering anything). Components stay thin.
 - **The reserve amount is never rendered** — only its state (No reserve / Reserve met /
   Reserve not met), matching how real auction platforms guard seller data.
 - **Price filtering and sorting use the "competing price"** — the high bid, or the

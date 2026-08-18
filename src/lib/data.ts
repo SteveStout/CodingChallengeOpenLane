@@ -138,6 +138,19 @@ export async function fetchVehicles(
   return page;
 }
 
+/** One vehicle by id, or null when it doesn't exist — backs detail deep links. */
+export async function fetchVehicleById(id: string, signal?: AbortSignal): Promise<Vehicle | null> {
+  const response = await fetch(
+    `/api/vehicles/${encodeURIComponent(id)}?anchor_ms=${localMidnightMs()}`,
+    { signal }
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`The inventory API responded with ${response.status}`);
+  }
+  return (await response.json()) as Vehicle;
+}
+
 /** Dropdown values, computed by the API over the full dataset. */
 export async function fetchFacets(signal?: AbortSignal): Promise<InventoryFacets> {
   const response = await fetch('/api/facets', { signal });
