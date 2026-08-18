@@ -1,4 +1,4 @@
-namespace TheBlock.Domain;
+﻿namespace TheBlock.Data;
 
 /// <summary>
 /// One photo in the vendored stock-photo manifest: its file name, the body
@@ -6,3 +6,4 @@ namespace TheBlock.Domain;
 /// the vehicle pictured).
 /// </summary>
 public sealed record PhotoEntry(string File, string Style, string Title);
+

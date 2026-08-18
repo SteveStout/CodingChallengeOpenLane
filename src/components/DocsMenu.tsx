@@ -17,11 +17,12 @@ function ExternalIcon() {
   );
 }
 
-type DocKey = 'readme' | 'dataflow';
+type DocKey = 'readme' | 'dataflow' | 'projects';
 
 const DOCS: Record<DocKey, { title: string; url: string }> = {
   readme: { title: 'README', url: '/api/docs/readme' },
   dataflow: { title: 'Data Flow', url: '/api/docs/dataflow' },
+  projects: { title: 'Projects', url: '/api/docs/projects' },
 };
 
 /**
@@ -93,6 +94,9 @@ export function DocsMenu() {
           </button>
           <button type="button" className={styles.item} role="menuitem" onClick={() => void openDoc('dataflow')}>
             Data flow diagram
+          </button>
+          <button type="button" className={styles.item} role="menuitem" onClick={() => void openDoc('projects')}>
+            Project structure
           </button>
           <a
             className={styles.item}

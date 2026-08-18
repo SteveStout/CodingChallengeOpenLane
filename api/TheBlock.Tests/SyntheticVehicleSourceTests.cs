@@ -1,6 +1,7 @@
 using TheBlock.Application;
 using TheBlock.Domain;
 using TheBlock.Infrastructure;
+using TheBlock.Data;
 
 namespace TheBlock.Tests;
 

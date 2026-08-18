@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -248,6 +248,10 @@ public class ApiIntegrationTests(WebApplicationFactory<Program> factory)
         var dataflow = await _client.GetAsync("/api/docs/dataflow");
         Assert.Equal(HttpStatusCode.OK, dataflow.StatusCode);
         Assert.Contains("Data Flow", await dataflow.Content.ReadAsStringAsync());
+
+        var projects = await _client.GetAsync("/api/docs/projects");
+        Assert.Equal(HttpStatusCode.OK, projects.StatusCode);
+        Assert.Contains("TheBlock.Data", await projects.Content.ReadAsStringAsync());
 
         var resume = await _client.GetAsync("/api/docs/resume");
         Assert.Equal(HttpStatusCode.OK, resume.StatusCode);

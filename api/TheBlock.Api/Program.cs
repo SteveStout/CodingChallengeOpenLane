@@ -4,6 +4,7 @@ using TheBlock.Api;
 using TheBlock.Application;
 using TheBlock.Domain;
 using TheBlock.Infrastructure;
+using TheBlock.Data;
 
 // Inventory + bidding API, composed onion-style: Domain (entities, photo
 // selection, auction schedule, filter and bid rules) <- Application
@@ -19,6 +20,7 @@ string contentRoot = builder.Environment.ContentRootPath;
 string dataPath = FindUpward(contentRoot, Path.Combine("data", "vehicles.json"));
 string readmePath = FindUpward(contentRoot, "README.md");
 string dataflowPath = FindUpward(contentRoot, Path.Combine("docs", "DATAFLOW.md"));
+string projectsPath = FindUpward(contentRoot, Path.Combine("docs", "PROJECTS.md"));
 string resumePath = Path.Combine(contentRoot, "wwwroot", "docs", "resume.pdf");
 string manifestPath = Path.Combine(contentRoot, "photo-manifest.json");
 string imagesRoot = Path.Combine(contentRoot, "wwwroot", "images");
@@ -121,6 +123,9 @@ app.MapGet("/api/docs/readme", () =>
 
 app.MapGet("/api/docs/dataflow", () =>
     Results.Text(File.ReadAllText(dataflowPath), "text/markdown"));
+
+app.MapGet("/api/docs/projects", () =>
+    Results.Text(File.ReadAllText(projectsPath), "text/markdown"));
 
 app.MapGet("/api/docs/resume", () =>
     Results.File(resumePath, "application/pdf"));

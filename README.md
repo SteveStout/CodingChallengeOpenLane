@@ -73,6 +73,19 @@ The work was pair-built with Claude Code throughout — I directed the scope, th
 architecture, and every product decision, and I'm happy to walk through the reasoning
 behind any line of it.
 
+## Workflow
+
+AI-assisted, verification-driven. I directed scope, architecture, and product decisions;
+Claude Code implemented under that direction, and nothing merged on trust: every change
+ran the typechecker and both unit suites, UI work was verified against real screenshots
+at desktop/tablet/mobile widths, and features were driven end to end in a headless
+browser before being called done. The build went domain-first (rules and tests before
+any UI), then grew in deliberate passes — frontend, API, scale, bidding — with an
+adversarial multi-agent code review mid-stream whose findings were fixed, tested, and
+in one case turned into a regression test. The living documentation (this README, the
+data-flow and project docs) is served inside the app under **About**, so the walkthrough
+can happen without leaving it.
+
 ## Assumptions and Scope
 
 - **`current_bid` is null for 112 of 200 vehicles** (the ones with `bid_count: 0`). The
@@ -86,14 +99,16 @@ behind any line of it.
   of ended, live, and upcoming auctions.
 - **A bid at or above the Buy Now price wins immediately at the Buy Now price**, even if
   it would fail the minimum-increment check — the instant-win rule takes precedence.
-- **Single anonymous buyer.** Your bids persist in localStorage and mark you high bidder;
-  there are no competing bidders advancing prices. "Reset bids" (header) clears the slate.
+- **Single anonymous buyer.** Your bids live in the API's memory, mark you high bidder,
+  and survive browser reloads (not API restarts); there are no competing bidders
+  advancing prices. "Reset bids" (header) clears the slate.
 - **Currency is CAD** (`en-CA`) since every listing is Canadian — one constant in
   `src/lib/format.ts` switches it.
 - **Photos are representative, not the actual lot.** 50 free-license photos (10 per body
   style, modern generations) are fetched from Wikimedia Commons and mapped
   deterministically per vehicle id, preferring photos of the vehicle's own make. Real
-  listings would use real lot photography; credits in `api/wwwroot/images/CREDITS.md`.
+  listings would use real lot photography; credits in
+  `api/TheBlock.Api/wwwroot/images/CREDITS.md`.
 - **The API owns everything**: data, filtering, sorting, paging, photo mapping, auction
   scheduling, and bid validation. The browser formats, counts down, and relays actions.
   Bid state is in API memory for a single anonymous buyer (no auth by design — isolated
@@ -109,11 +124,11 @@ behind any line of it.
   openlane.com: Onward navy `#0A1B5F`, OPENLANE blue `#0061FF`, silver neutrals, pill
   buttons, and Poppins (a Google Fonts stylesheet link — the one external asset — with a
   system-font fallback).
-- **Backend:** .NET 10 minimal API in onion architecture (`api/`): `TheBlock.Domain`
-  (entities, photo selection, auction schedule, filter rules — no dependencies),
-  `TheBlock.Application` (the `InventoryService` use case behind source ports),
-  `TheBlock.Infrastructure` (JSON file adapters), `TheBlock.Api` (host, endpoints,
-  static images). Filtering is LINQ over GET parameters, including auction status —
+- **Backend:** .NET 10 minimal API in onion architecture (`api/`): `TheBlock.Data`
+  (the pure data records — no dependencies), `TheBlock.Domain` (photo selection, auction
+  schedule, filter and bid rules), `TheBlock.Application` (the `InventoryService` and
+  `BidService` use cases behind source ports), `TheBlock.Infrastructure` (JSON file
+  adapters, synthetic scale-up), `TheBlock.Api` (host, endpoints, static images). Filtering is LINQ over GET parameters, including auction status —
   the window derivation is ported to C# with identical math so server filtering agrees
   with client rendering. `src/lib/data.ts` remains the frontend's single data seam.
 - **Database:** none (the API reads the JSON file; bid state lives in API memory).
@@ -131,6 +146,10 @@ behind any line of it.
 - **Bidding** — live countdowns on a shared clock, tiered minimum increments, validation
   with buyer-facing reasons, a persistent "You're the high bidder" state, Buy Now with a
   distinct sold/purchase-price presentation, and bids that survive refresh.
+- **Navigation and docs** — every view is a GET URL (filters, sorts, and open vehicles
+  are shareable, deep-linkable, and browser-Back friendly), and the header's About menu
+  serves this README, [docs/DATAFLOW.md](docs/DATAFLOW.md),
+  [docs/PROJECTS.md](docs/PROJECTS.md), and the author's résumé from inside the app.
 
 ## Strengths
 
@@ -165,14 +184,29 @@ behind any line of it.
   *Where:* `api/TheBlock.Domain/AuctionSchedule.cs`, `BidRules.cs`, and
   `AuctionClock.cs`; `api/TheBlock.Api/VehicleWire.cs` (derived facts onto the wire);
   `src/lib/auction.ts` (all that remains client-side).
-- **Onion architecture that earns its layers.** Domain has zero dependencies;
-  Application talks through ports (`IVehicleSource`, `IPhotoManifestSource`);
-  Infrastructure adapts files; the host only binds and serializes. The proof it's not
-  ceremony: the 100k scale-up is a decorator on a port (`SyntheticVehicleSource`) —
-  nothing above it changed — and the test suite swaps in-memory fakes at the same seams.
-  *Where:* `api/TheBlock.Domain/` → `api/TheBlock.Application/` (`Ports.cs`,
-  `InventoryService.cs`, `BidService.cs`) → `api/TheBlock.Infrastructure/` →
-  `api/TheBlock.Api/Program.cs` (composition root); fakes in
+- **Sealed records everywhere data is data.** Every C# data shape (`Vehicle`,
+  `VehicleFilter`, `BidState`, `SearchResult`, …) is a `sealed record`: records give
+  value-based comparison — two vehicles with the same fields *are* equal — and sealing
+  keeps that trustworthy, because record equality includes a hidden runtime-type check
+  (`EqualityContract`) that inheritance would quietly poison. Sealing also states intent
+  (a wire contract is not an extension point), lets the JIT devirtualize the generated
+  `Equals`/`GetHashCode`, and is the low-regret default: unsealing later is non-breaking,
+  sealing later isn't. The payoff shows up in practice — determinism tests compare whole
+  vehicle lists by value, and non-destructive `with` mutations power the bid overlay and
+  the synthetic variants.
+  *Where:* `api/TheBlock.Data/Vehicle.cs` (and every record beside it); `with` usage in
+  `api/TheBlock.Application/BidService.cs` and
+  `api/TheBlock.Infrastructure/SyntheticVehicleSource.cs`; value-equality assertions in
+  `api/TheBlock.Tests/SyntheticVehicleSourceTests.cs`.
+- **Onion architecture that earns its layers.** Data (the pure records) has zero
+  dependencies; Domain (the rules) depends only on Data; Application talks through ports
+  (`IVehicleSource`, `IPhotoManifestSource`); Infrastructure adapts files; the host only
+  binds and serializes. The proof it's not ceremony: the 100k scale-up is a decorator on
+  a port (`SyntheticVehicleSource`) — nothing above it changed — and the test suite
+  swaps in-memory fakes at the same seams.
+  *Where:* `api/TheBlock.Data/` → `api/TheBlock.Domain/` → `api/TheBlock.Application/`
+  (`Ports.cs`, `InventoryService.cs`, `BidService.cs`) → `api/TheBlock.Infrastructure/`
+  → `api/TheBlock.Api/Program.cs` (composition root); fakes in
   `api/TheBlock.Tests/InventoryServiceTests.cs`.
 
 ## Notable Decisions
@@ -194,14 +228,41 @@ behind any line of it.
   cache hits skip it entirely — revisited filter combinations render instantly. Refresh
   paths (retry buttons, the periodic status-filter refresh) bypass the cache; photos
   carry `Cache-Control: public, max-age=86400` so the browser's HTTP cache keeps them.
-- **Photo mapping lives behind the API**: `api/Program.cs` swaps the dataset's
+- **Photo mapping lives behind the API**: the server swaps the dataset's
   placeholder URLs for vendored stock photos, preferring same-make photos from the
   body-style pool. `data/vehicles.json` itself stays untouched, and the frontend simply
   renders whatever image URLs the API returns — as it would in production.
 
+## Problems Hit and Solved
+
+- **The dataset contradicted its own example.** The brief's sample vehicle shows
+  `current_bid: 22800`, but 112 of the 200 real records have `current_bid: null`.
+  Profiling the data before writing the types caught it; the fix rippled into the type
+  (`number | null`), the minimum-bid rule (first bid meets the opening ask), and the
+  "Starting bid" labels.
+- **Cross-language rule drift bit twice.** With auction math mirrored in TypeScript and
+  C#, the server and browser disagreed first across timezones, then on DST transition
+  days. The durable fix wasn't a patch — the client now sends its literal local-midnight
+  `anchor_ms`, and all derived facts moved server-side so the drift class can't recur.
+- **A "passing" test suite was proven blind by mutation.** Reordering the buy-now check
+  ahead of bid validation left all tests green while breaking the rules — so the test
+  that catches it now exists, along with a guard against `Infinity` instantly winning a
+  buy-now (found by adversarial review).
+- **The first E2E failure was the rules being smarter than the test.** Bidding the
+  minimum on a vehicle whose `min_next_bid` crossed its `buy_now_price` triggered a
+  legitimate instant win the test didn't expect; the test now documents both outcomes as
+  correct.
+- **Vite's file watcher crashed on .NET build output.** Windows file locks in
+  `api/**/obj` killed the dev server with `EBUSY`; fixed by excluding `api/**` from the
+  watcher in `vite.config.ts`.
+- **`npm start` raced its own browser tab.** Vite opens the browser in ~0.4 s while the
+  API takes seconds to boot, so first paint could show a dead-API error. The initial
+  load now retries quietly for up to 30 s, and the fix carries a regression E2E written
+  from the actual bug report.
+
 ## Testing
 
-**API (80 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
+**API (81 xUnit tests, separate `TheBlock.Tests` project):** one suite per onion layer —
 domain (photo gallery determinism and make preference, FNV-1a known vectors, auction
 schedule bounds and boundaries, every filter rule, bid rules including increment tiers
 and buy-now precedence), application (`InventoryService`/`BidService` with in-memory

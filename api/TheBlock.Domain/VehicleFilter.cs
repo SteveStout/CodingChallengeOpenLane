@@ -1,3 +1,5 @@
+using TheBlock.Data;
+
 namespace TheBlock.Domain;
 
 /// <summary>

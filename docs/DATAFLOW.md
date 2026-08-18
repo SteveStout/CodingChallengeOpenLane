@@ -83,7 +83,8 @@ every route and hands straight off to the Application layer:
 
 1. **Seed** — `data/vehicles.json` (the challenge's 200 records, untouched) is read once
    at startup by `JsonFileVehicleSource` —
-   `api/TheBlock.Infrastructure/JsonFileSources.cs`.
+   `api/TheBlock.Infrastructure/JsonFileSources.cs` — deserializing into the `Vehicle`
+   record, which lives with the other pure data shapes in `api/TheBlock.Data/`.
 2. **Scale** — `SyntheticVehicleSource` —
    `api/TheBlock.Infrastructure/SyntheticVehicleSource.cs` — expands it to 100,000
    deterministic variants: each new id is hashed (FNV-1a,

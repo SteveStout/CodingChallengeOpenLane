@@ -74,6 +74,13 @@ test('the About menu shows the README in-app and links the résumé PDF', async 
   ).toBeVisible();
   await page.keyboard.press('Escape');
 
+  await page.getByRole('button', { name: 'About' }).click();
+  await page.getByRole('menuitem', { name: 'Project structure' }).click();
+  await expect(
+    page.getByRole('dialog').getByRole('heading', { level: 2, name: 'TheBlock.Data' })
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+
   const resume = await page.request.get('/api/docs/resume');
   expect(resume.headers()['content-type']).toContain('application/pdf');
 

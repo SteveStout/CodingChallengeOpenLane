@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using TheBlock.Domain;
+using TheBlock.Data;
 
 namespace TheBlock.Api;
 
